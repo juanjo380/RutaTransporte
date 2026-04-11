@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Usuario {
+  id        String    @id @default(cuid())
+  nombre    String
+  email     String    @unique
+  password  String
+  rol       Rol       @default(ESTUDIANTE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  reservas  Reserva[]
+}
+
+model Ruta {
+  id        String     @id @default(cuid())
+  nombre    String
+  origen    String
+  destino   String
+  activa    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  horarios  Horario[]
+}
+
+model Horario {
+  id         String     @id @default(cuid())
+  rutaId     String
+  ruta       Ruta       @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+  salida     DateTime
+  llegada    DateTime?
+  cupoTotal  Int
+  cupoOcupado Int        @default(0)
+  activo     Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  reservas   Reserva[]
+}
+
+model Reserva {
+  id         String     @id @default(cuid())
+  usuarioId  String
+  horarioId  String
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  horario    Horario    @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+  estado     EstadoReserva @default(ACTIVA)
+  codigo     String     @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([usuarioId, horarioId])
+}
+
+enum Rol {
+  ESTUDIANTE
+  CONDUCTOR
+  ADMIN
+}
+
+enum EstadoReserva {
+  ACTIVA
+  CANCELADA
+  COMPLETADA
+}
