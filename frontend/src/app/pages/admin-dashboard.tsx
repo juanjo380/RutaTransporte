@@ -5,7 +5,8 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Bus, LogOut, User, Clock, MapPin, GraduationCap, Phone, CreditCard, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle } from "lucide-react";
+import { useTheme } from "../context/theme-context";
+import { Bus, LogOut, User, Clock, MapPin, GraduationCap, Phone, CreditCard, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle, Moon, Sun } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -137,6 +138,7 @@ const mockReservations = [
 export function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [reservations] = useState(mockReservations);
   const [selectedSchedule, setSelectedSchedule] = useState<string | "all">("all");
   const [schedules, setSchedules] = useState(schedulesList);
@@ -207,6 +209,9 @@ export function AdminDashboard() {
                 <User className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">{user?.name}</span>
               </div>
+              <Button variant="outline" size="sm" onClick={toggleTheme}>
+                {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+              </Button>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="size-4 mr-2" />
                 Salir

@@ -17,6 +17,8 @@ import {
   Route,
   GraduationCap,
   Phone,
+  Moon,
+  Sun,      
 } from "lucide-react";
 
 // Mock data para el conductor
@@ -93,6 +95,7 @@ const driverSchedules = {
 export function DriverView() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const driverId = user?.driverId || "d1";
   const driverData = driverSchedules[driverId as keyof typeof driverSchedules];
 
@@ -138,6 +141,9 @@ export function DriverView() {
                 <User className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">{user?.name}</span>
               </div>
+              <Button variant="outline" size="sm" onClick={toggleTheme}>
+                {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+              </Button>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="size-4 mr-2" />
                 Salir
