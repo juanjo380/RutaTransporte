@@ -122,24 +122,24 @@ export function DriverView() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="bg-green-600 p-3 rounded-xl shadow-lg">
+              <div className="bg-green-600 dark:bg-green-500 p-3 rounded-xl shadow-lg">
                 <Bus className="size-8 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl text-green-900">Panel del Conductor</h1>
-                <p className="text-gray-700">Mis rutas y pasajeros</p>
+                <h1 className="text-4xl text-green-900 dark:text-green-200">Panel del Conductor</h1>
+                <p className="text-gray-700 dark:text-gray-300">Mis rutas y pasajeros</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
                 <User className="size-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">{user?.name}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
@@ -153,7 +153,7 @@ export function DriverView() {
         </div>
 
         {/* Driver Info Card */}
-        <Card className="mb-6 bg-gradient-to-r from-green-50 to-blue-50">
+        <Card className="mb-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="size-5 text-green-600" />
@@ -215,7 +215,7 @@ export function DriverView() {
                   {schedule.departureTime} - {schedule.arrivalTime}
                   <Badge
                     variant="secondary"
-                    className="ml-2 bg-green-100 text-green-800"
+                    className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
                   >
                     {schedule.students.length} estudiantes
                   </Badge>
@@ -228,13 +228,13 @@ export function DriverView() {
         {/* Current Schedule Details */}
         {currentSchedule && (
           <>
-            <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="font-semibold text-gray-800 mb-1">
+                  <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
                     Ruta: {currentSchedule.departureTime} - {currentSchedule.arrivalTime}
                   </h2>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                     <MapPin className="size-4" />
                     <span>Buga → Tuluá</span>
                   </div>
@@ -243,7 +243,7 @@ export function DriverView() {
                   <p className="text-2xl font-bold text-green-700">
                     {currentSchedule.students.length}
                   </p>
-                  <p className="text-xs text-gray-600">Estudiantes</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Estudiantes</p>
                 </div>
               </div>
             </div>
@@ -262,8 +262,8 @@ export function DriverView() {
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="bg-green-100 rounded-full size-10 flex items-center justify-center">
-                            <span className="font-semibold text-green-700">
+                          <div className="bg-green-100 dark:bg-green-900/30 rounded-full size-10 flex items-center justify-center">
+                            <span className="font-semibold text-green-700 dark:text-green-200">
                               {index + 1}
                             </span>
                           </div>
@@ -271,7 +271,7 @@ export function DriverView() {
                             <CardTitle className="text-base">
                               {student.name}
                             </CardTitle>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
                               {student.university}
                             </p>
                           </div>
