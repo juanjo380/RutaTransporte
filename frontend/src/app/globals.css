@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tus estilos de Figma */
+@import './styles/fonts.css';
+@import './styles/theme.css';
 
 :root {
   --background: #ffffff;
