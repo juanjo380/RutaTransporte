@@ -1,104 +1,128 @@
-# Frontend - Ruta Universitaria
+# Frontend - RutaTransporte
 
-Este directorio contiene el front de la plataforma de transporte universitario. La aplicación está construida con Next.js, React, TypeScript y una capa de componentes basada en shadcn/ui y Radix UI. Aunque usa la estructura de Next, la navegación principal se resuelve con `react-router-dom` a través de un router centralizado.
+Este directorio contiene la interfaz web de RutaTransporte, la plataforma de gestión de transporte universitario. El frontend está construido con Next.js, React y TypeScript, y combina componentes de Radix UI con patrones tipo shadcn/ui para mantener una base accesible, consistente y fácil de extender.
 
-## Propósito
+La aplicación usa Next.js como contenedor, pero la navegación funcional se resuelve con `react-router-dom` dentro de un router centralizado. Eso permite simular hoy un flujo completo de producto sin depender de la navegación nativa de App Router.
 
-El front simula el flujo completo de la plataforma para tres perfiles:
+## Objetivo
 
-- Estudiante: consulta horarios, reserva cupos y revisa sus reservas.
-- Administrador: visualiza métricas, reservas y asignación de conductores.
-- Conductor: consulta sus rutas y los pasajeros asignados.
+La experiencia está pensada para tres perfiles operativos:
 
-La app está pensada como prototipo funcional con datos mockeados en memoria. No depende todavía de un backend real para autenticación ni persistencia de reservas.
+- Estudiante: consulta horarios, reserva cupos y administra sus reservas.
+- Administrador: visualiza métricas, asigna conductores y controla el estado general.
+- Conductor: revisa su agenda, rutas asignadas y pasajeros por viaje.
 
-## Stack principal
+La app funciona actualmente con datos mockeados en memoria, por lo que sirve como prototipo funcional de extremo a extremo mientras el backend termina de integrarse.
+
+## Stack Principal
 
 - Next.js 16
 - React 19
 - TypeScript
 - Tailwind CSS v4
 - react-router-dom
+- Radix UI y componentes base estilo shadcn/ui
 - lucide-react para iconografía
 - sonner para notificaciones
-- next-themes y contexto propio para tema visual
-- componentes base tipo shadcn/ui sobre Radix UI
+- next-themes para sincronizar el estado visual de las notificaciones con el tema activo
 
-## Scripts disponibles
+## Arquitectura Del Frontend
 
-Desde esta carpeta se pueden ejecutar estos comandos:
+La estructura principal vive en `src/app`:
 
-- `npm run dev`: inicia el entorno de desarrollo.
-- `npm run build`: genera el build de producción.
-- `npm run start`: levanta la aplicación ya compilada.
+- `App.tsx`: ensambla los providers globales, crea el router y monta el toaster global.
+- `routes.tsx`: define rutas públicas, privadas y redirecciones por rol.
+- `layout.js`: configura metadata, fuentes tipográficas y clases raíz del documento.
+- `globals.css`: entrada real de estilos globales, importación del sistema de tema y normalización visual.
+- `context/`: providers de autenticación y tema.
+- `pages/`: pantallas principales del producto.
+- `components/`: componentes funcionales reutilizables.
+- `components/ui/`: librería base de interfaz.
+- `styles/`: tokens visuales, fuentes auxiliares y reglas compartidas.
 
-## Estructura general
+## Navegación Y Acceso
 
-La organización principal vive en `src/app`:
+La navegación principal se define en `src/app/routes.tsx`.
 
-- `App.tsx`: punto de entrada visual del front. Envuelve la app con los providers de tema y autenticación, renderiza el router y el toaster global.
-- `routes.tsx`: define las rutas públicas y protegidas.
-- `layout.js`: layout raíz de Next, metadata general y carga de fuentes.
-- `globals.css`: archivo global de estilos, variables y tema.
-- `context/`: providers globales para autenticación y tema.
-- `pages/`: pantallas principales de la aplicación.
-- `components/`: componentes reutilizables del UI y piezas funcionales.
-- `components/ui/`: biblioteca de componentes base de interfaz.
-- `styles/`: estilos auxiliares y variables visuales.
+Rutas relevantes:
 
-## Flujo de navegación
-
-La navegación se resuelve en `src/app/routes.tsx`.
-
-Rutas principales:
-
-- `/login`: pantalla de acceso.
-- `/`: redirección según el rol del usuario autenticado.
-- `/student`: vista del estudiante.
-- `/admin`: panel administrativo.
+- `/login`: acceso al sistema.
+- `/`: redirección según el rol autenticado.
+- `/student`: panel del estudiante.
+- `/admin`: panel del administrador.
 - `/driver`: panel del conductor.
-- `*`: redirección a la raíz.
+- `*`: fallback hacia la raíz.
 
-Las rutas privadas están protegidas con `ProtectedRoute`, que valida autenticación y rol.
-`RoleBasedRedirect` envía cada usuario a su panel correspondiente.
+Las rutas protegidas usan `ProtectedRoute` para validar sesión y rol. `RoleBasedRedirect` distribuye a cada usuario en su panel correspondiente sin duplicar lógica en las vistas.
 
-## Autenticación y roles
+## Autenticación Y Roles
 
-La autenticación vive en `src/app/context/auth-context.tsx`.
+La autenticación está implementada en `src/app/context/auth-context.tsx`.
 
 Características actuales:
 
 - Usa usuarios mockeados en memoria.
-- Maneja login, logout, usuario actual y estado de autenticación.
-- Soporta tres roles: `student`, `admin` y `driver`.
+- Expone login, logout, usuario actual y estado de autenticación.
+- Soporta los roles `student`, `admin` y `driver`.
 - El conductor incluye `driverId` para asociarlo a sus rutas.
 
-Importante: esto todavía no está conectado a un backend real, así que el login sirve como prototipo funcional.
+Esto todavía no está conectado a un backend real, así que el login funciona como simulador de producto y no como autenticación de producción.
 
-## Tema visual
+## Tema Visual
 
-El cambio de tema se controla desde `src/app/context/theme-context.tsx`.
+El tema global se controla desde `src/app/context/theme-context.tsx`.
 
 Comportamiento:
 
-- Guarda el tema en `localStorage`.
+- Persiste la preferencia en `localStorage`.
 - Alterna entre `light` y `dark`.
-- Agrega o quita la clase `dark` en el elemento raíz del documento.
-- Permite que los componentes usen clases Tailwind con variantes oscuras.
+- Aplica o elimina la clase `dark` en el elemento raíz del documento.
+- Permite que toda la interfaz consuma variantes de Tailwind compatibles con tema oscuro.
 
-## Pantallas principales
+## Sistema Visual Y Colorimetría
+
+La interfaz usa un lenguaje visual sobrio, institucional y orientado a operación. La intención no es decorativa, sino funcional: que la lectura de estados, rutas y reservas sea inmediata.
+
+### Principios
+
+- Un solo sistema de tokens para superficies, bordes, texto y acciones.
+- Evitar colores hardcoded en componentes nuevos.
+- Priorizar contraste, legibilidad y separación clara entre estados.
+- Mantener una identidad profesional en light y dark mode.
+
+### Paleta Semántica
+
+| Token | Uso | Intención |
+| --- | --- | --- |
+| `background` | lienzo principal | superficie neutra para toda la app |
+| `card` | tarjetas y paneles | contenedores limpios y legibles |
+| `primary` | acción principal | azul institucional con presencia clara |
+| `secondary` | apoyo visual | variación suave para superficies y chips |
+| `muted` | texto secundario | jerarquía de información sin ruido |
+| `accent` | énfasis secundario | resaltado controlado para bloques informativos |
+| `destructive` | cancelaciones y alertas | rojo de acción, no decorativo |
+| `sidebar` | navegación | contraste estable para navegación |
+| `chart-*` | gráficos y métricas | paleta analítica consistente |
+
+### Tipografía
+
+- `Geist Sans` se usa como fuente principal de interfaz.
+- `Geist Mono` se reserva para datos técnicos, valores numéricos o elementos que requieran alineación monoespaciada.
+- Las reglas base de encabezados y controles viven en `src/app/styles/theme.css`.
+
+## Pantallas Principales
 
 ### Login
 
-`src/app/pages/login.tsx` muestra el formulario de acceso.
+`src/app/pages/login.tsx` contiene el acceso al sistema.
 
 Incluye:
 
 - selector de tema,
 - formulario de email y contraseña,
-- mensajes de error,
-- tarjetas con credenciales de prueba,
-- identidad visual de la plataforma.
+- feedback de error,
+- credenciales de prueba,
+- branding visual de la plataforma.
 
 ### Estudiante
 
@@ -108,21 +132,21 @@ Incluye:
 
 - listado de horarios disponibles,
 - diálogo para solicitar cupo,
-- pestaña de reservas activas,
+- pestañas de reservas activas,
 - cancelación de reservas,
-- notificaciones toast al confirmar o cancelar,
+- notificaciones toast,
 - selector de tema y salida de sesión.
 
 ### Administrador
 
-`src/app/pages/admin-dashboard.tsx` muestra una vista operativa del sistema.
+`src/app/pages/admin-dashboard.tsx` expone la vista operativa.
 
 Incluye:
 
 - métricas de reservas y estudiantes únicos,
 - matriz de horarios,
 - asignación de conductores a rutas,
-- consulta de reservas agrupadas,
+- agrupación de reservas,
 - tarjetas y filtros de gestión.
 
 ### Conductor
@@ -133,35 +157,35 @@ Incluye:
 
 - información del conductor,
 - horarios asignados,
-- lista de pasajeros por ruta,
-- vista resumida por horario,
+- listado de pasajeros por ruta,
+- resumen operativo por horario,
 - datos mockeados para simulación.
 
-## Componentes reutilizables
+## Componentes Reutilizables
 
-### Lógica de acceso
+### Lógica De Acceso
 
-- `components/protected-route.tsx`: bloquea acceso si no hay sesión o si el rol no coincide.
-- `components/role-based-redirect.tsx`: manda al usuario a su panel según rol.
+- `components/protected-route.tsx`: bloquea el acceso si no hay sesión o si el rol no coincide.
+- `components/role-based-redirect.tsx`: envía al usuario a su panel según rol.
 
-### Reserva y horarios
+### Reserva Y Horarios
 
-- `components/bus-schedule-card.tsx`: tarjeta visual de cada horario con ocupación, conductor y acción de reserva.
-- `components/reservation-dialog.tsx`: formulario modal para completar la reserva.
+- `components/bus-schedule-card.tsx`: tarjeta de horario con ocupación, conductor y acción principal.
+- `components/reservation-dialog.tsx`: modal para completar una reserva.
 - `components/my-reservations.tsx`: lista de reservas activas del estudiante.
-- `components/driver-profile.tsx`: perfil resumido del conductor usado en varias vistas.
+- `components/driver-profile.tsx`: perfil resumido del conductor.
 
-### UI base
+### UI Base
 
 La carpeta `components/ui/` contiene los bloques visuales reutilizables del sistema:
 
 - `button`, `card`, `badge`, `dialog`, `input`, `label`, `tabs`, `select`, `toast`, entre otros.
 
-Estos componentes funcionan como base de toda la interfaz y permiten mantener consistencia visual.
+Estos bloques actúan como base de toda la interfaz y deben mantenerse alineados con los tokens globales del tema.
 
-## Estilos y configuración visual
+## Estilos Y Configuración Visual
 
-La documentación de estilos está concentrada en estos archivos:
+La documentación de estilos se concentra en estos archivos:
 
 - `src/app/globals.css`
 - `src/app/styles/theme.css`
@@ -170,54 +194,39 @@ La documentación de estilos está concentrada en estos archivos:
 
 ### `globals.css`
 
-Es la hoja global principal. Define:
-
-- importación de Tailwind,
-- importación de estilos de fuente y tema,
-- variables base de colores,
-- soporte para modo oscuro,
-- tipografía base del cuerpo.
-
-También enlaza los tokens del tema con variables CSS para que Tailwind los consuma de forma consistente.
+Es la hoja global activa. Define la entrada de Tailwind, importa los estilos de fuente y tema, y aplica la capa visual base del documento.
 
 ### `theme.css`
 
-Define el sistema visual completo mediante variables CSS:
+Contiene el sistema de diseño principal mediante variables CSS:
 
-- colores base: background, foreground, card, accent, muted, primary,
-- bordes, inputs y ring,
+- colores base: `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent` y `destructive`,
+- bordes, inputs, ring y estados,
 - radios de borde,
 - colores de sidebar,
 - paleta de charts,
-- variantes para modo oscuro.
-
-Además, contiene reglas base que ajustan tipografía global para elementos como `h1`, `h2`, `label`, `button` e `input`.
+- variantes para modo claro y oscuro,
+- reglas base para jerarquía tipográfica.
 
 ### `fonts.css`
 
-Actualmente está vacío, pero ya está enlazado desde `globals.css`.
-Se puede usar después para declarar fuentes personalizadas o imports tipográficos si el proyecto lo necesita.
+Queda como archivo auxiliar para tipografías adicionales o reglas de font-face si el proyecto lo requiere más adelante.
 
 ### `layout.js`
 
-Carga las fuentes de Google `Geist` y `Geist Mono`, define metadata base y aplica clases globales al documento.
+Carga las fuentes de Google `Geist` y `Geist Mono`, define la metadata base y marca el documento con la configuración de idioma y clases raíz.
 
-## Convenciones de diseño
+## Convenciones De Desarrollo
 
-La interfaz usa una línea visual consistente basada en:
+- Usar tokens CSS o utilidades de Tailwind para los colores, no valores arbitrarios.
+- Mantener la lógica de tema en el provider global, no en cada pantalla.
+- Sincronizar documentación y variables visuales cuando cambie la paleta.
+- Conservar la separación entre vistas de negocio y componentes de presentación.
+- Evitar duplicar reglas de estilo que ya estén en `theme.css`.
 
-- fondos con gradientes suaves,
-- tarjetas con sombras y superficies translúcidas,
-- color por rol o contexto funcional,
-- iconos para reforzar lectura rápida,
-- estados de ocupación en horarios,
-- soporte visual para dark mode.
+## Datos Mockeados
 
-En general, el front prioriza claridad operativa y contraste por estado, no solo estética.
-
-## Datos mockeados
-
-Hoy la app funciona con datos locales definidos en los propios componentes o en el contexto.
+La aplicación sigue funcionando con datos locales definidos en componentes o contexto.
 
 Ejemplos:
 
@@ -226,31 +235,37 @@ Ejemplos:
 - reservas de ejemplo en el panel administrativo,
 - horarios y pasajeros del conductor.
 
-Esto permite probar el flujo completo sin backend.
+Esto permite probar el flujo completo sin depender del backend.
 
-## Dependencias relevantes
-
-Algunas dependencias importantes del front son:
+## Dependencias Relevantes
 
 - `react-router-dom` para navegación.
 - `sonner` para notificaciones.
 - `lucide-react` para iconos.
-- `next-themes` para soporte de tema.
+- `next-themes` para que las notificaciones respeten el tema activo.
 - `@radix-ui/*` para componentes accesibles.
 - `tailwind-merge`, `clsx` y `class-variance-authority` para composición de clases.
 
-## Notas importantes
+## Scripts Disponibles
 
-- La aplicación mezcla Next.js con un router de React Router; eso es válido en este prototipo, pero conviene documentarlo si luego se migra a una navegación nativa de Next.
+Desde esta carpeta se pueden ejecutar estos comandos:
+
+- `npm run dev`: inicia el entorno de desarrollo.
+- `npm run build`: genera el build de producción.
+- `npm run start`: levanta la aplicación ya compilada.
+
+## Notas Importantes
+
+- La app mezcla Next.js con `react-router-dom`; es correcto para este prototipo, pero conviene revisarlo si más adelante se migra a navegación nativa de Next.
 - La autenticación todavía es mock, así que las credenciales solo sirven para desarrollo.
-- La documentación de estilos debe mantenerse alineada con `theme.css`, porque ahí vive la mayor parte del sistema visual.
+- La base de estilos debe mantenerse alineada con `theme.css`, porque ahí vive el sistema cromático y la mayor parte de la coherencia visual.
 
-## Sugerencia para evolución del proyecto
+## Evolución Recomendada
 
-Si este front se lleva a producción, los siguientes pasos lógicos serían:
+Si el frontend se lleva a producción, los siguientes pasos lógicos serían:
 
 - conectar autenticación real con backend,
 - persistir reservas y horarios,
-- mover los datos mock a servicios o API,
+- mover datos mock a servicios o API,
 - centralizar tipos compartidos,
 - documentar variables de entorno si se agregan integraciones externas.
