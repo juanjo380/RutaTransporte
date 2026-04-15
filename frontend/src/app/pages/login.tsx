@@ -17,15 +17,15 @@ export function LoginPage() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const success = login(email, password);
-    if (success) {
+    const result = await login(email, password);
+    if (result.ok) {
       navigate("/");
     } else {
-      setError("Email o contraseña incorrectos");
+      setError(result.message || "Email o contraseña incorrectos");
     }
   };
 
