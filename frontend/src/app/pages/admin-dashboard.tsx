@@ -5,7 +5,8 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Bus, LogOut, User, Clock, MapPin, GraduationCap, Phone, CreditCard, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle } from "lucide-react";
+import { useTheme } from "../context/theme-context";
+import { Bus, LogOut, User, Clock, MapPin, GraduationCap, Phone, CreditCard, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle, Moon, Sun } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -137,6 +138,7 @@ const mockReservations = [
 export function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [reservations] = useState(mockReservations);
   const [selectedSchedule, setSelectedSchedule] = useState<string | "all">("all");
   const [schedules, setSchedules] = useState(schedulesList);
@@ -190,7 +192,7 @@ export function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -198,15 +200,18 @@ export function AdminDashboard() {
             <div className="flex items-center gap-3">
               <Bus className="size-10 text-purple-600" />
               <div>
-                <h1 className="text-4xl text-purple-900">Panel Administrativo</h1>
-                <p className="text-gray-700">Gestión de reservas y cupos</p>
+                <h1 className="text-4xl text-purple-900 dark:text-purple-200">Panel Administrativo</h1>
+                <p className="text-gray-700 dark:text-gray-300">Gestión de reservas y cupos</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
                 <User className="size-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">{user?.name}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
+              <Button variant="outline" size="sm" onClick={toggleTheme}>
+                {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+              </Button>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="size-4 mr-2" />
                 Salir
@@ -219,14 +224,14 @@ export function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
                 Total Reservas
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <BarChart3 className="size-8 text-purple-600" />
-                <span className="text-3xl font-bold text-purple-900">
+                <span className="text-3xl font-bold text-purple-900 dark:text-purple-200">
                   {totalReservations}
                 </span>
               </div>
@@ -235,28 +240,28 @@ export function AdminDashboard() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
                 Estudiantes Únicos
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <GraduationCap className="size-8 text-blue-600" />
-                <span className="text-3xl font-bold text-blue-900">{totalStudents}</span>
+                <span className="text-3xl font-bold text-blue-900 dark:text-blue-200">{totalStudents}</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
                 Horarios Activos
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Clock className="size-8 text-green-600" />
-                <span className="text-3xl font-bold text-green-900">
+                <span className="text-3xl font-bold text-green-900 dark:text-green-200">
                   {scheduleOptions.length}
                 </span>
               </div>
@@ -283,11 +288,11 @@ export function AdminDashboard() {
 
           {/* MATRIZ DE RUTAS */}
           <TabsContent value="matrix" className="space-y-4">
-            <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <h2 className="font-semibold text-gray-800 mb-2">
                 Matriz de rutas del día
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
                 Visualización completa de todos los horarios, conductores asignados y estudiantes
               </p>
             </div>
@@ -302,32 +307,32 @@ export function AdminDashboard() {
                           <Clock className="size-5 text-purple-600" />
                           {schedule.departureTime} - {schedule.arrivalTime}
                         </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                           Ruta: Buga → Tuluá
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-3xl font-bold text-purple-900">
+                        <div className="text-3xl font-bold text-purple-900 dark:text-purple-200">
                           {schedule.studentCount}
                         </div>
-                        <p className="text-xs text-gray-600">Estudiantes</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">Estudiantes</p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {/* Conductor asignado */}
                     {schedule.driver ? (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-900/40 rounded-lg p-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="bg-green-600 p-2 rounded-lg">
                               <Bus className="size-5 text-white" />
                             </div>
                             <div>
-                              <p className="font-semibold text-green-900">
+                              <p className="font-semibold text-green-900 dark:text-green-200">
                                 {schedule.driver.name}
                               </p>
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                                 <span>Placa: {schedule.driver.licensePlate}</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">
@@ -344,7 +349,7 @@ export function AdminDashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-900/40 rounded-lg p-3">
                         <p className="text-sm text-yellow-800 font-medium">
                           ⚠️ Sin conductor asignado
                         </p>
@@ -354,21 +359,21 @@ export function AdminDashboard() {
                     {/* Lista de estudiantes */}
                     {schedule.studentCount > 0 ? (
                       <div className="border-t pt-3">
-                        <p className="text-sm font-medium text-gray-700 mb-2">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                           Estudiantes registrados:
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {schedule.students.map((student) => (
                             <div
                               key={student.id}
-                              className="bg-gray-50 rounded-lg p-2 flex items-center gap-2"
+                              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 flex items-center gap-2"
                             >
                               <GraduationCap className="size-4 text-gray-600" />
                               <div>
                                 <p className="text-sm font-medium">
                                   {student.studentName}
                                 </p>
-                                <p className="text-xs text-gray-600">
+                                <p className="text-xs text-gray-600 dark:text-gray-300">
                                   {student.university}
                                 </p>
                               </div>
@@ -391,11 +396,11 @@ export function AdminDashboard() {
 
           {/* VISTA RÁPIDA */}
           <TabsContent value="quick" className="space-y-4">
-            <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <h2 className="font-semibold text-gray-800 mb-2">
                 Vista rápida de ocupación
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
                 Resumen compacto de cuántos estudiantes hay en cada horario
               </p>
             </div>
@@ -405,18 +410,18 @@ export function AdminDashboard() {
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-purple-100">
+                    <thead className="bg-purple-100 dark:bg-gray-800/70">
                       <tr>
-                        <th className="text-left p-3 text-sm font-semibold text-purple-900">
+                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
                           Horario
                         </th>
-                        <th className="text-left p-3 text-sm font-semibold text-purple-900">
+                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
                           Conductor
                         </th>
-                        <th className="text-center p-3 text-sm font-semibold text-purple-900">
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
                           Estudiantes
                         </th>
-                        <th className="text-center p-3 text-sm font-semibold text-purple-900">
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
                           Estado
                         </th>
                       </tr>
@@ -425,7 +430,7 @@ export function AdminDashboard() {
                       {scheduleMatrix.map((schedule, index) => (
                         <tr
                           key={schedule.id}
-                          className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                          className={index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"}
                         >
                           <td className="p-3">
                             <div className="flex items-center gap-2">
@@ -439,7 +444,7 @@ export function AdminDashboard() {
                             {schedule.driver ? (
                               <div>
                                 <p className="font-medium">{schedule.driver.name}</p>
-                                <p className="text-xs text-gray-600">
+                                <p className="text-xs text-gray-600 dark:text-gray-300">
                                   {schedule.driver.licensePlate}
                                 </p>
                               </div>
@@ -450,8 +455,8 @@ export function AdminDashboard() {
                             )}
                           </td>
                           <td className="p-3 text-center">
-                            <div className="inline-flex items-center justify-center bg-purple-100 rounded-full px-3 py-1">
-                              <span className="text-lg font-bold text-purple-900">
+                            <div className="inline-flex items-center justify-center bg-purple-100 dark:bg-gray-700 rounded-full px-3 py-1">
+                              <span className="text-lg font-bold text-purple-900 dark:text-purple-200">
                                 {schedule.studentCount}
                               </span>
                             </div>
@@ -474,17 +479,17 @@ export function AdminDashboard() {
             </Card>
 
             {/* Resumen */}
-            <Card className="bg-gradient-to-r from-purple-50 to-blue-50">
+            <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total de estudiantes transportados hoy</p>
-                    <p className="text-3xl font-bold text-purple-900">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Total de estudiantes transportados hoy</p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">
                       {totalReservations}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-600">Rutas con conductor asignado</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Rutas con conductor asignado</p>
                     <p className="text-3xl font-bold text-green-700">
                       {scheduleMatrix.filter((s) => s.driver).length}/{schedules.length}
                     </p>
@@ -496,17 +501,17 @@ export function AdminDashboard() {
 
           {/* ASIGNAR CONDUCTORES */}
           <TabsContent value="assign" className="space-y-4">
-            <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <h2 className="font-semibold text-gray-800 mb-2">
                 Asignar conductores a rutas
               </h2>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
                 Gestiona qué conductor estará a cargo de cada horario
               </p>
             </div>
 
             {/* Lista de conductores disponibles */}
-            <Card className="bg-gradient-to-r from-blue-50 to-green-50">
+            <Card className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-gray-900 dark:to-gray-800">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Shield className="size-5 text-green-600" />
@@ -518,7 +523,7 @@ export function AdminDashboard() {
                   {availableDrivers.map((driver) => (
                     <div
                       key={driver.id}
-                      className="bg-white rounded-lg p-3 flex items-center justify-between"
+                      className="bg-white dark:bg-gray-900 rounded-lg p-3 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
                         <div className="bg-green-100 p-2 rounded-lg">
@@ -526,7 +531,7 @@ export function AdminDashboard() {
                         </div>
                         <div>
                           <p className="font-medium">{driver.name}</p>
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                             <span>{driver.licensePlate}</span>
                             <span>•</span>
                             <span className="flex items-center gap-1">
@@ -569,7 +574,7 @@ export function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center gap-3">
-                        <label className="text-sm font-medium text-gray-700 min-w-[120px]">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
                           Conductor:
                         </label>
                         <Select
@@ -600,8 +605,8 @@ export function AdminDashboard() {
                         </Select>
                       </div>
                       {currentDriver && (
-                        <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-2">
-                          <p className="text-xs text-green-800">
+                        <div className="mt-3 bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-900/40 rounded-lg p-2">
+                          <p className="text-xs text-green-800 dark:text-green-200">
                             ✓ {currentDriver.name} - {currentDriver.licensePlate} - {currentDriver.experience} de experiencia
                           </p>
                         </div>
