@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 export type UserRole = "student" | "admin" | "driver";
 
@@ -12,68 +12,105 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for prototype
-const mockUsers: Record<string, { password: string; user: User }> = {
-  "estudiante@univ.edu": {
-    password: "estudiante123",
-    user: {
-      id: "u1",
-      email: "estudiante@univ.edu",
-      name: "Juan Estudiante",
-      role: "student",
-    },
-  },
-  "admin@ruta.com": {
-    password: "admin123",
-    user: {
-      id: "u2",
-      email: "admin@ruta.com",
-      name: "Administrador Sistema",
-      role: "admin",
-    },
-  },
-  "carlos@conductor.com": {
-    password: "conductor123",
-    user: {
-      id: "u3",
-      email: "carlos@conductor.com",
-      name: "Carlos Rodríguez",
-      role: "driver",
-      driverId: "d1",
-    },
-  },
-  "maria@conductor.com": {
-    password: "conductor123",
-    user: {
-      id: "u4",
-      email: "maria@conductor.com",
-      name: "María González",
-      role: "driver",
-      driverId: "d2",
-    },
-  },
+const TOKEN_STORAGE_KEY = "ruta_transporte_token";
+const USER_STORAGE_KEY = "ruta_transporte_user";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+type AuthApiResponse = {
+  ok: boolean;
+  message?: string;
+  token?: string;
+  user?: User;
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = (email: string, password: string): boolean => {
-    const mockUser = mockUsers[email];
-    if (mockUser && mockUser.password === password) {
-      setUser(mockUser.user);
-      return true;
+  useEffect(() => {
+    const restoreSession = async () => {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      const userRaw = localStorage.getItem(USER_STORAGE_KEY);
+
+      if (!token || !userRaw) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+          localStorage.removeItem(USER_STORAGE_KEY);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        const data = (await response.json()) as AuthApiResponse;
+        if (data.ok && data.user) {
+          setUser(data.user);
+        }
+      } catch {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void restoreSession();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ ok: boolean; message?: string }> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = (await response.json()) as AuthApiResponse;
+
+      if (!response.ok || !data.ok || !data.user || !data.token) {
+        return {
+          ok: false,
+          message: data.message || "Email o contraseña incorrectos",
+        };
+      }
+
+      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
+      setUser(data.user);
+
+      return { ok: true };
+    } catch {
+      return {
+        ok: false,
+        message: "No fue posible conectar con el servidor",
+      };
     }
-    return false;
   };
 
   const logout = () => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
     setUser(null);
   };
 
@@ -84,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         isAuthenticated: !!user,
+        isLoading,
       }}
     >
       {children}
