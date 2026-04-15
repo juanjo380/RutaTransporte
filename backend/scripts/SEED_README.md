@@ -27,6 +27,29 @@ cd backend
 npm run seed
 ```
 
+Por defecto, `npm run seed` usa modo `upsert` (crea o actualiza).
+
+### Modos disponibles
+
+```bash
+# Solo crea. Si existe email, lo omite.
+npm run seed:create
+
+# Crea si no existe y actualiza si existe.
+npm run seed:upsert
+
+# Igual que upsert, pero ademas elimina de BD los usuarios no listados en const users.
+npm run seed:sync
+```
+
+Tambien puedes usar argumento directo:
+
+```bash
+node scripts/seed-users.js --mode=create
+node scripts/seed-users.js --mode=upsert
+node scripts/seed-users.js --mode=sync
+```
+
 ### Opción 2: Con node directo
 
 ```bash
@@ -53,7 +76,13 @@ Si un usuario ya existe, saltará ese email:
 ⏭️  Usuario juan.perez@univ.edu ya existe, omitiendo...
 ```
 
-## Modificar usuarios
+En modo `upsert` o `sync` verás salida tipo:
+
+```
+✅ Usuario sincronizado: juan.perez@univ.edu (ESTUDIANTE)
+```
+
+## Modificar, actualizar y eliminar usuarios
 
 Para añadir o cambiar usuarios, edita `scripts/seed-users.js`:
 
@@ -69,7 +98,15 @@ const users = [
 ];
 ```
 
-Luego corre nuevamente `npm run seed`.
+Luego ejecuta según necesidad:
+
+- Crear solo nuevos: `npm run seed:create`
+- Crear o actualizar existentes: `npm run seed` o `npm run seed:upsert`
+- Sincronizar exacto (crear, actualizar y eliminar no listados): `npm run seed:sync`
+
+Regla importante:
+- Si eliminas un usuario del array `const users`, ese usuario solo se borra de la BD al usar `npm run seed:sync`.
+- Con `seed:create` o `seed:upsert` no se elimina.
 
 ## Seguridad
 
@@ -77,6 +114,7 @@ Luego corre nuevamente `npm run seed`.
 ✅ No se guarda plaintext en BD  
 ✅ Compatible con login backend (autenticación funcional)  
 ✅ Idempotente: no duplica usuarios si ya existen  
+✅ Modos flexibles para create, upsert y sync  
 
 ## Troubleshooting
 
