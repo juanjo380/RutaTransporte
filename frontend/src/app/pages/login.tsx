@@ -50,7 +50,7 @@ export function LoginPage() {
               <Bus className="size-8 text-white" />
             </div>
           </div>
-          <h1 className="text-4xl text-blue-900 dark:text-blue-100">Ruta Universitaria</h1>
+          <h1 className="text-4xl text-blue-900 dark:text-blue-100">Transporte Uceva</h1>
           <p className="text-lg text-gray-700 dark:text-gray-300">Buga - Tuluá</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Sistema de reserva de cupos para estudiantes
