@@ -1,0 +1,27 @@
+# shared build artifacts
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+
+# environment
+.env
+.env.*
+!**/.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+Thumbs.db
+desktop.ini
+.vercel/
+*.tsbuildinfo
+*.pem
