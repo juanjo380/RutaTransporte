@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 
 export type UserRole = "student" | "admin" | "driver";
 
@@ -23,6 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
 const USER_STORAGE_KEY = "ruta_transporte_user";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutos en ms
 
 type AuthApiResponse = {
   ok: boolean;
@@ -34,6 +35,7 @@ type AuthApiResponse = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -75,6 +77,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void restoreSession();
   }, []);
+
+  // Monitorear inactividad y logout silencioso
+  useEffect(() => {
+    if (!user) return; // Solo si está autenticado
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+
+      inactivityTimerRef.current = setTimeout(() => {
+        // Logout silencioso después de inactividad
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        setUser(null);
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Escuchar actividad del usuario
+    const activityEvents = ["click", "keypress", "mousemove", "mousedown", "touchstart"];
+
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, resetInactivityTimer, true);
+    });
+
+    // Iniciar timer al montar
+    resetInactivityTimer();
+
+    return () => {
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, resetInactivityTimer, true);
+      });
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [user]);
 
   const login = async (email: string, password: string): Promise<{ ok: boolean; message?: string }> => {
     try {
