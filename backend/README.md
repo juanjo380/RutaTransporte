@@ -79,3 +79,57 @@ En despliegue/producción:
 ```bash
 npx prisma migrate deploy
 ```
+
+## Autenticacion (JWT)
+
+Se implemento un flujo basico de autenticacion con registro, login y endpoint protegido para obtener el usuario autenticado.
+
+### Variables de entorno
+
+Agregar en `backend/.env`:
+
+```bash
+JWT_SECRET="change_me_super_secret"
+JWT_EXPIRES_IN="7d"
+```
+
+### Endpoints
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me` (requiere `Authorization: Bearer <token>`)
+
+### Ejemplo de registro
+
+```json
+{
+	"name": "Juan Perez",
+	"email": "juan@example.com",
+	"password": "Pass1234",
+	"role": "student"
+}
+```
+
+Roles permitidos en API: `student`, `driver`, `admin`.
+
+### Respuesta esperada en register/login
+
+```json
+{
+	"ok": true,
+	"token": "<jwt>",
+	"user": {
+		"id": "...",
+		"name": "Juan Perez",
+		"email": "juan@example.com",
+		"role": "student"
+	}
+}
+```
+
+### Archivos involucrados
+
+- `server.js` (montaje de rutas auth)
+- `src/routes/auth.js` (rutas)
+- `src/controllers/authController.js` (logica de register/login/me)
+- `src/middleware/auth.js` (validacion de JWT)
