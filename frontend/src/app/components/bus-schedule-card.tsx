@@ -6,6 +6,9 @@ import { Driver, DriverProfile } from "./driver-profile";
 
 interface BusScheduleCardProps {
   id: string;
+  direction: "ida" | "vuelta";
+  origin: string;
+  destination: string;
   departureTime: string;
   arrivalTime: string;
   availableSeats: number;
@@ -16,7 +19,9 @@ interface BusScheduleCardProps {
 
 export function BusScheduleCard({
   id,
-  departureTime,
+  direction,
+  origin,
+  destination,
   arrivalTime,
   availableSeats,
   totalSeats,
@@ -33,7 +38,9 @@ export function BusScheduleCard({
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             <Bus className="size-5 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="text-lg dark:text-gray-100">Ruta Buga - Tuluá</CardTitle>
+            <CardTitle className="text-lg dark:text-gray-100">
+              {direction === "ida" ? "Ruta de ida" : "Ruta de vuelta"}
+            </CardTitle>
           </div>
           {isAlmostFull && !isFull && (
             <Badge variant="destructive" className="text-xs">
@@ -53,14 +60,14 @@ export function BusScheduleCard({
             <MapPin className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400">Salida</p>
-              <p className="font-medium dark:text-gray-100">Buga</p>
+              <p className="font-medium dark:text-gray-100">{origin}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400">Llegada</p>
-              <p className="font-medium dark:text-gray-100">Tuluá</p>
+              <p className="font-medium dark:text-gray-100">{destination}</p>
             </div>
           </div>
         </div>
@@ -69,8 +76,8 @@ export function BusScheduleCard({
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Horario</p>
-              <p className="font-semibold dark:text-gray-100">{departureTime} - {arrivalTime}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Hora de llegada</p>
+              <p className="font-semibold dark:text-gray-100">{arrivalTime}</p>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,13 +10,33 @@ import {
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
-import { User, Phone, CreditCard, GraduationCap } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import {
+  Check,
+  ChevronsUpDown,
+  User,
+  Phone,
+  CreditCard,
+  GraduationCap,
+  MapPin,
+} from "lucide-react";
 
 interface ReservationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   scheduleInfo: {
     id: string;
+    direction: "ida" | "vuelta";
+    origin: string;
+    destination: string;
     departureTime: string;
     arrivalTime: string;
   } | null;
@@ -28,7 +48,48 @@ export interface ReservationData {
   studentId: string;
   phone: string;
   university: string;
+  pickupStop: string;
+  dropoffStop: string;
 }
+
+const FIXED_UCEVA_STOP = "Tulua - UCEVA";
+
+const IDA_PICKUP_STOPS = [
+  "Montellano - Ara",
+  "Estambul - Dollarcity",
+  "Julia - Rapitienda del parque",
+  "Julia - Pizza nostra",
+  "Julia - ",
+  "Portales del rio - Bahia Terminal",
+  "Aures - Semaforo Caribe",
+  "Paloblanco - Estación Terpel",
+  "Paloblanco - D1",
+  "Paloblanco - Panaderia",
+  "Carmelo - CR1/CL4",
+  "Carmelo - CR1/CL5",
+  "Carmelo - CR2/CL5",
+  "La Merced - Cañaveral Terminal",
+  "La Merced - CR19/CL3",
+  "Buga - Universidad sede",
+];
+
+const VUELTA_DROPOFF_STOPS = [
+  "Montellano - Ara",
+  "Estambul - Dollarcity",
+  "Julia - Rapitienda del parque",
+  "Julia - Pizza nostra",
+  "Julia - ",
+  "La ventura - Alibaba",
+  "Portales del rio - Bahia Terminal",
+  "Aures - Semaforo Caribe",
+  "Paloblanco - Estación Terpel",
+  "Paloblanco - D1",
+  "Paloblanco - Panaderia",
+  "Carmelo - CR1/CL4",
+  "Carmelo - CR1/CL5",
+  "Carmelo - CR2/CL5",
+  "Buga - Universidad sede",
+];
 
 export function ReservationDialog({
   open,
@@ -36,24 +97,65 @@ export function ReservationDialog({
   scheduleInfo,
   onConfirm,
 }: ReservationDialogProps) {
+  const [pickupOpen, setPickupOpen] = useState(false);
+  const [dropoffOpen, setDropoffOpen] = useState(false);
   const [formData, setFormData] = useState<ReservationData>({
     name: "",
     studentId: "",
     phone: "",
     university: "",
+    pickupStop: "",
+    dropoffStop: "",
   });
+
+  const isVuelta = scheduleInfo?.direction === "vuelta";
+  const pickupStops = isVuelta ? [FIXED_UCEVA_STOP] : IDA_PICKUP_STOPS;
+  const dropoffStops = isVuelta ? VUELTA_DROPOFF_STOPS : [FIXED_UCEVA_STOP];
+
+  useEffect(() => {
+    if (!scheduleInfo) {
+      return;
+    }
+
+    setFormData((prev) => {
+      if (scheduleInfo.direction === "ida") {
+        return {
+          ...prev,
+          pickupStop: IDA_PICKUP_STOPS.includes(prev.pickupStop) ? prev.pickupStop : "",
+          dropoffStop: FIXED_UCEVA_STOP,
+        };
+      }
+
+      return {
+        ...prev,
+        pickupStop: FIXED_UCEVA_STOP,
+        dropoffStop: VUELTA_DROPOFF_STOPS.includes(prev.dropoffStop)
+          ? prev.dropoffStop
+          : "",
+      };
+    });
+  }, [scheduleInfo]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onConfirm(formData);
-    setFormData({ name: "", studentId: "", phone: "", university: "" });
+    setFormData({
+      name: "",
+      studentId: "",
+      phone: "",
+      university: "",
+      pickupStop: "",
+      dropoffStop: "",
+    });
   };
 
   const isFormValid =
     formData.name &&
     formData.studentId &&
     formData.phone &&
-    formData.university;
+    formData.university &&
+    formData.pickupStop &&
+    formData.dropoffStop;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,7 +165,7 @@ export function ReservationDialog({
           <DialogDescription>
             {scheduleInfo && (
               <>
-                Horario: {scheduleInfo.departureTime} - {scheduleInfo.arrivalTime}
+                Llegada a las {scheduleInfo.arrivalTime} ({scheduleInfo.origin} - {scheduleInfo.destination})
               </>
             )}
           </DialogDescription>
@@ -141,6 +243,114 @@ export function ReservationDialog({
                 }
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pickupStop">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4" />
+                  Parada de recogida
+                </div>
+              </Label>
+              <Popover open={pickupOpen} onOpenChange={setPickupOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="pickupStop"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={pickupOpen}
+                    className="w-full justify-between"
+                    disabled={isVuelta}
+                  >
+                    {formData.pickupStop || "Selecciona dónde te recogen"}
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar parada..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontró una parada.</CommandEmpty>
+                      <CommandGroup>
+                        {pickupStops.map((stop) => (
+                          <CommandItem
+                            key={stop}
+                            value={stop}
+                            onSelect={() => {
+                              setFormData({ ...formData, pickupStop: stop });
+                              setPickupOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 size-4 ${formData.pickupStop === stop ? "opacity-100" : "opacity-0"}`}
+                            />
+                            {stop}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {isVuelta && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  En vuelta, la recogida siempre inicia en UCEVA.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dropoffStop">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4" />
+                  Parada de destino
+                </div>
+              </Label>
+              <Popover open={dropoffOpen} onOpenChange={setDropoffOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="dropoffStop"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={dropoffOpen}
+                    className="w-full justify-between"
+                    disabled={!isVuelta}
+                  >
+                    {formData.dropoffStop || "Selecciona dónde te dejan"}
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar parada..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontró una parada.</CommandEmpty>
+                      <CommandGroup>
+                        {dropoffStops.map((stop) => (
+                          <CommandItem
+                            key={stop}
+                            value={stop}
+                            onSelect={() => {
+                              setFormData({ ...formData, dropoffStop: stop });
+                              setDropoffOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 size-4 ${formData.dropoffStop === stop ? "opacity-100" : "opacity-0"}`}
+                            />
+                            {stop}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {!isVuelta && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  En ida, el destino siempre es UCEVA.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
