@@ -7,6 +7,7 @@ import { ThemeProvider } from "./context/theme-context";
 import { appRoutes } from "./routes";
 import { createBrowserRouter } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
+import { WhatsAppFloatButton } from "./components/whatsapp-float-button";
 
 export default function App() {
   const [router, setRouter] = useState<ReturnType<typeof createBrowserRouter> | null>(null);
@@ -20,6 +21,7 @@ export default function App() {
       <AuthProvider>
         {router ? <RouterProvider router={router} /> : null}
         <Toaster />
+        <WhatsAppFloatButton />
       </AuthProvider>
     </ThemeProvider>
   );

@@ -13,6 +13,9 @@ import { MyReservations } from "../components/my-reservations";
 
 interface Schedule {
   id: string;
+  direction: "ida" | "vuelta";
+  origin: string;
+  destination: string;
   departureTime: string;
   arrivalTime: string;
   availableSeats: number;
@@ -23,6 +26,9 @@ interface Schedule {
 interface Reservation {
   id: string;
   scheduleId: string;
+  direction: "ida" | "vuelta";
+  origin: string;
+  destination: string;
   departureTime: string;
   arrivalTime: string;
   userData: ReservationData;
@@ -38,8 +44,11 @@ export function StudentHome() {
   const [schedules, setSchedules] = useState<Schedule[]>([
     {
       id: "1",
-      departureTime: "06:00 AM",
-      arrivalTime: "07:00 AM",
+      direction: "ida",
+      origin: "Buga",
+      destination: "Tuluá",
+      departureTime: "06:30 AM",
+      arrivalTime: "06:30 AM",
       availableSeats: 15,
       totalSeats: 40,
       driver: {
@@ -55,9 +64,12 @@ export function StudentHome() {
     },
     {
       id: "2",
-      departureTime: "08:00 AM",
-      arrivalTime: "09:00 AM",
-      availableSeats: 3,
+      direction: "ida",
+      origin: "Buga",
+      destination: "Tuluá",
+      departureTime: "07:00 AM",
+      arrivalTime: "07:00 AM",
+      availableSeats: 18,
       totalSeats: 40,
       driver: {
         id: "d2",
@@ -72,8 +84,31 @@ export function StudentHome() {
     },
     {
       id: "3",
-      departureTime: "12:00 PM",
-      arrivalTime: "01:00 PM",
+      direction: "ida",
+      origin: "Buga",
+      destination: "Tuluá",
+      departureTime: "08:00 AM",
+      arrivalTime: "08:00 AM",
+      availableSeats: 3,
+      totalSeats: 40,
+      driver: {
+        id: "d2",
+        name: "Jeison Amado",
+        phone: "301-987-6543",
+        rating: 4.9,
+        experience: "10 años",
+        licensePlate: "XYZ-789",
+        verified: true,
+        totalTrips: 1500,
+      },
+    },
+    {
+      id: "4",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "11:00 AM",
+      arrivalTime: "11:00 AM",
       availableSeats: 25,
       totalSeats: 40,
       driver: {
@@ -88,9 +123,52 @@ export function StudentHome() {
       },
     },
     {
-      id: "4",
-      departureTime: "04:00 PM",
-      arrivalTime: "05:00 PM",
+      id: "5",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "11:30 AM",
+      arrivalTime: "11:30 AM",
+      availableSeats: 22,
+      totalSeats: 40,
+      driver: {
+        id: "d1",
+        name: "Jose",
+        phone: "300-123-4567",
+        rating: 4.8,
+        experience: "8 años",
+        licensePlate: "ABC-123",
+        verified: true,
+        totalTrips: 1200,
+      },
+    },
+    {
+      id: "6",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "12:20 PM",
+      arrivalTime: "12:20 PM",
+      availableSeats: 16,
+      totalSeats: 40,
+      driver: {
+        id: "d4",
+        name: "Jeison Amado",
+        phone: "303-234-5678",
+        rating: 5.0,
+        experience: "12 años",
+        licensePlate: "GHI-321",
+        verified: true,
+        totalTrips: 2000,
+      },
+    },
+    {
+      id: "7",
+      direction: "ida",
+      origin: "Buga",
+      destination: "Tuluá",
+      departureTime: "01:10 PM",
+      arrivalTime: "01:10 PM",
       availableSeats: 8,
       totalSeats: 40,
       driver: {
@@ -105,9 +183,72 @@ export function StudentHome() {
       },
     },
     {
-      id: "5",
-      departureTime: "06:00 PM",
-      arrivalTime: "07:00 PM",
+      id: "8",
+      direction: "ida",
+      origin: "Buga",
+      destination: "Tuluá",
+      departureTime: "02:00 PM",
+      arrivalTime: "02:00 PM",
+      availableSeats: 11,
+      totalSeats: 40,
+      driver: {
+        id: "d2",
+        name: "Jeison Amado",
+        phone: "301-987-6543",
+        rating: 4.9,
+        experience: "10 años",
+        licensePlate: "XYZ-789",
+        verified: true,
+        totalTrips: 1500,
+      },
+    },
+    {
+      id: "9",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "04:30 PM",
+      arrivalTime: "04:30 PM",
+      availableSeats: 13,
+      totalSeats: 40,
+      driver: {
+        id: "d1",
+        name: "Fabian",
+        phone: "300-123-4567",
+        rating: 4.8,
+        experience: "8 años",
+        licensePlate: "ABC-123",
+        verified: true,
+        totalTrips: 1200,
+      },
+    },
+    {
+      id: "10",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "05:30 PM",
+      arrivalTime: "05:30 PM",
+      availableSeats: 9,
+      totalSeats: 40,
+      driver: {
+        id: "d3",
+        name: "Jose",
+        phone: "302-456-7890",
+        rating: 4.7,
+        experience: "6 años",
+        licensePlate: "DEF-456",
+        verified: true,
+        totalTrips: 950,
+      },
+    },
+    {
+      id: "11",
+      direction: "vuelta",
+      origin: "Tuluá",
+      destination: "Buga",
+      departureTime: "06:10 PM",
+      arrivalTime: "06:10 PM",
       availableSeats: 0,
       totalSeats: 40,
       driver: {
@@ -126,6 +267,8 @@ export function StudentHome() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const idaSchedules = schedules.filter((schedule) => schedule.direction === "ida");
+  const vueltaSchedules = schedules.filter((schedule) => schedule.direction === "vuelta");
 
   const handleReserve = (scheduleId: string) => {
     const schedule = schedules.find((s) => s.id === scheduleId);
@@ -141,6 +284,9 @@ export function StudentHome() {
     const newReservation: Reservation = {
       id: Date.now().toString(),
       scheduleId: selectedSchedule.id,
+      direction: selectedSchedule.direction,
+      origin: selectedSchedule.origin,
+      destination: selectedSchedule.destination,
       departureTime: selectedSchedule.departureTime,
       arrivalTime: selectedSchedule.arrivalTime,
       userData,
@@ -161,7 +307,7 @@ export function StudentHome() {
     setSelectedSchedule(null);
 
     toast.success("¡Reserva confirmada!", {
-      description: `Tu cupo para el bus de las ${selectedSchedule.departureTime} ha sido reservado.`,
+      description: `Tu cupo para llegar a las ${selectedSchedule.arrivalTime} ha sido reservado.`,
     });
   };
 
@@ -225,15 +371,15 @@ export function StudentHome() {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="schedules" className="w-full">
+        <Tabs defaultValue="reservations" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="schedules" className="flex items-center gap-2">
-              <Calendar className="size-4" />
-              Horarios
-            </TabsTrigger>
             <TabsTrigger value="reservations" className="flex items-center gap-2">
               <TicketCheck className="size-4" />
               Mis Reservas
+            </TabsTrigger>
+            <TabsTrigger value="schedules" className="flex items-center gap-2">
+              <Calendar className="size-4" />
+              Horarios
             </TabsTrigger>
           </TabsList>
 
@@ -243,16 +389,35 @@ export function StudentHome() {
                 Horarios disponibles - Hoy
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Selecciona el horario de tu preferencia y completa el formulario para reservar tu cupo.
+                Selecciona un horario de ida o vuelta y completa el formulario para reservar tu cupo.
               </p>
             </div>
-            {schedules.map((schedule) => (
-              <BusScheduleCard
-                key={schedule.id}
-                {...schedule}
-                onReserve={handleReserve}
-              />
-            ))}
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                Ida
+              </h3>
+              {idaSchedules.map((schedule) => (
+                <BusScheduleCard
+                  key={schedule.id}
+                  {...schedule}
+                  onReserve={handleReserve}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                Vuelta
+              </h3>
+              {vueltaSchedules.map((schedule) => (
+                <BusScheduleCard
+                  key={schedule.id}
+                  {...schedule}
+                  onReserve={handleReserve}
+                />
+              ))}
+            </div>
           </TabsContent>
 
           <TabsContent value="reservations">
@@ -279,6 +444,9 @@ export function StudentHome() {
           selectedSchedule
             ? {
                 id: selectedSchedule.id,
+                direction: selectedSchedule.direction,
+                origin: selectedSchedule.origin,
+                destination: selectedSchedule.destination,
                 departureTime: selectedSchedule.departureTime,
                 arrivalTime: selectedSchedule.arrivalTime,
               }
