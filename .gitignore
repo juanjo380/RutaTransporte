@@ -25,3 +25,4 @@ desktop.ini
 .vercel/
 *.tsbuildinfo
 *.pem
+backend/.env
