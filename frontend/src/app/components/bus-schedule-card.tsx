@@ -22,6 +22,7 @@ export function BusScheduleCard({
   direction,
   origin,
   destination,
+  departureTime,
   arrivalTime,
   availableSeats,
   totalSeats,
@@ -76,8 +77,12 @@ export function BusScheduleCard({
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Hora de llegada</p>
-              <p className="font-semibold dark:text-gray-100">{arrivalTime}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {direction === "vuelta" ? "Hora de salida" : "Hora de llegada"}
+              </p>
+              <p className="font-semibold dark:text-gray-100">
+                {direction === "vuelta" ? departureTime : arrivalTime}
+              </p>
             </div>
           </div>
         </div>

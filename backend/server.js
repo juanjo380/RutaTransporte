@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { prisma } from "./src/lib/prisma.js";
 import authRoutes from "./src/routes/auth.js";
+import reservasRoutes from "./src/routes/reservas.js";
+import horariosRoutes from "./src/routes/horarios.js";
 
 dotenv.config();
 
@@ -14,6 +16,8 @@ app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/reservas", reservasRoutes);
+app.use("/api/horarios", horariosRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "ruta-transporte-backend" });

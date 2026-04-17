@@ -46,6 +46,26 @@ export function MyReservations({
   reservations,
   onCancel,
 }: MyReservationsProps) {
+  const sortedReservations = [...reservations].sort((a, b) => {
+    const directionPriorityA = a.direction === "ida" ? 0 : 1;
+    const directionPriorityB = b.direction === "ida" ? 0 : 1;
+
+    if (directionPriorityA !== directionPriorityB) {
+      return directionPriorityA - directionPriorityB;
+    }
+
+    const timeA =
+      a.direction === "vuelta"
+        ? parseTimeToMinutes(a.departureTime)
+        : parseTimeToMinutes(a.arrivalTime);
+    const timeB =
+      b.direction === "vuelta"
+        ? parseTimeToMinutes(b.departureTime)
+        : parseTimeToMinutes(b.arrivalTime);
+
+    return timeA - timeB;
+  });
+
   const firstEntryReservation =
     reservations.filter((reservation) => reservation.direction === "ida").length > 0
       ? [...reservations]
@@ -62,7 +82,7 @@ export function MyReservations({
           .filter((reservation) => reservation.direction === "vuelta")
           .sort(
             (a, b) =>
-              parseTimeToMinutes(a.arrivalTime) - parseTimeToMinutes(b.arrivalTime)
+              parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime)
           )[0]
       : null;
 
@@ -100,7 +120,7 @@ export function MyReservations({
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Salida (Vuelta)</p>
                 <p className="text-sm font-medium dark:text-gray-100">
-                  {firstReturnReservation ? firstReturnReservation.arrivalTime : "Sin reserva"}
+                  {firstReturnReservation ? firstReturnReservation.departureTime : "Sin reserva"}
                 </p>
               </div>
             </div>
@@ -108,7 +128,7 @@ export function MyReservations({
         </CardContent>
       </Card>
 
-      {reservations.map((reservation) => (
+      {sortedReservations.map((reservation) => (
         <Card key={reservation.id}>
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
@@ -132,9 +152,11 @@ export function MyReservations({
               <div className="flex items-center gap-2">
                 <Clock className="size-4 text-gray-500 dark:text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Hora de llegada</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {reservation.direction === "vuelta" ? "Hora de salida" : "Hora de llegada"}
+                  </p>
                   <p className="text-sm font-medium dark:text-gray-100">
-                    {reservation.arrivalTime}
+                    {reservation.direction === "vuelta" ? reservation.departureTime : reservation.arrivalTime}
                   </p>
                 </div>
               </div>
