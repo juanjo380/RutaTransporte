@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/auth-context";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useTheme } from "../context/theme-context";
-import { Bus, LogOut, User, Clock, MapPin, GraduationCap, Phone, CreditCard, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle, Moon, Sun } from "lucide-react";
+import { Bus, LogOut, User, Clock, GraduationCap, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle, Moon, Sun } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -15,6 +15,10 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { toast } from "sonner";
+import { Input } from "../components/ui/input";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const TOKEN_STORAGE_KEY = "ruta_transporte_token";
 
 // Mock data - conductores disponibles
 const availableDrivers = [
@@ -52,100 +56,239 @@ const availableDrivers = [
   },
 ];
 
-// Mock data - horarios del día
-const schedulesList = [
-  { id: "1", departureTime: "06:00 AM", arrivalTime: "07:00 AM", driverId: "d1" },
-  { id: "2", departureTime: "08:00 AM", arrivalTime: "09:00 AM", driverId: "d2" },
-  { id: "3", departureTime: "12:00 PM", arrivalTime: "01:00 PM", driverId: "d3" },
-  { id: "4", departureTime: "04:00 PM", arrivalTime: "05:00 PM", driverId: "d1" },
-  { id: "5", departureTime: "06:00 PM", arrivalTime: "07:00 PM", driverId: null },
-];
+type Schedule = {
+  id: string;
+  departureTime: string;
+  arrivalTime: string;
+  driverId: string | null;
+};
 
-// Mock data - reservas
-const mockReservations = [
-  {
-    id: "1",
-    studentName: "Ana García Pérez",
-    studentId: "2021001234",
-    university: "Universidad del Valle",
-    phone: "300-555-0001",
-    scheduleId: "1",
-    departureTime: "06:00 AM",
-    arrivalTime: "07:00 AM",
-    driver: "Carlos Rodríguez",
-    licensePlate: "ABC-123",
-    date: "31/03/2026",
-    status: "confirmed",
-  },
-  {
-    id: "2",
-    studentName: "Luis Martínez López",
-    studentId: "2020987654",
-    university: "Universidad del Valle",
-    phone: "301-555-0002",
-    scheduleId: "1",
-    departureTime: "06:00 AM",
-    arrivalTime: "07:00 AM",
-    driver: "Carlos Rodríguez",
-    licensePlate: "ABC-123",
-    date: "31/03/2026",
-    status: "confirmed",
-  },
-  {
-    id: "3",
-    studentName: "María Rodríguez Sánchez",
-    studentId: "2021567890",
-    university: "Universidad Autónoma",
-    phone: "302-555-0003",
-    scheduleId: "2",
-    departureTime: "08:00 AM",
-    arrivalTime: "09:00 AM",
-    driver: "María González",
-    licensePlate: "XYZ-789",
-    date: "31/03/2026",
-    status: "confirmed",
-  },
-  {
-    id: "4",
-    studentName: "Carlos Hernández",
-    studentId: "2019123456",
-    university: "Universidad del Valle",
-    phone: "303-555-0004",
-    scheduleId: "4",
-    departureTime: "04:00 PM",
-    arrivalTime: "05:00 PM",
-    driver: "Carlos Rodríguez",
-    licensePlate: "ABC-123",
-    date: "31/03/2026",
-    status: "confirmed",
-  },
-  {
-    id: "5",
-    studentName: "Diana Gutiérrez",
-    studentId: "2022654321",
-    university: "Universidad Santiago de Cali",
-    phone: "304-555-0005",
-    scheduleId: "3",
-    departureTime: "12:00 PM",
-    arrivalTime: "01:00 PM",
-    driver: "Jorge Martínez",
-    licensePlate: "DEF-456",
-    date: "31/03/2026",
-    status: "confirmed",
-  },
-];
+type Reservation = {
+  id: string;
+  codigo: string;
+  studentName: string;
+  studentEmail: string;
+  university: string;
+  scheduleId: string;
+  departureTime: string;
+  arrivalTime: string;
+  date: string;
+  status: string;
+};
+
+type AdminReservasResponse = {
+  ok: boolean;
+  message?: string;
+  data?: Array<{
+    id: string;
+    codigo: string;
+    estado: string;
+    createdAt: string;
+    usuario: {
+      nombre: string;
+      email: string;
+    };
+    horario: {
+      id: string;
+      salida: string;
+      llegada: string | null;
+      cupoTotal: number;
+      cupoOcupado: number;
+    };
+  }>;
+};
+
+type HorariosResponse = {
+  ok: boolean;
+  message?: string;
+  data?: Array<{
+    id: string;
+    salida: string;
+    llegada: string | null;
+  }>;
+};
+
+function formatTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
 export function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [reservations] = useState(mockReservations);
-  const [selectedSchedule, setSelectedSchedule] = useState<string | "all">("all");
-  const [schedules, setSchedules] = useState(schedulesList);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [emailToCancel, setEmailToCancel] = useState("");
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchDashboardData = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsLoadingData(true);
+    try {
+      const [reservasRes, horariosRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/reservas/admin`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch(`${API_BASE_URL}/api/horarios`),
+      ]);
+
+      const reservasJson = (await reservasRes.json()) as AdminReservasResponse;
+      const horariosJson = (await horariosRes.json()) as HorariosResponse;
+
+      if (!reservasRes.ok || !reservasJson.ok) {
+        toast.error("No se pudieron cargar reservas", {
+          description: reservasJson.message || "Intenta nuevamente",
+        });
+      } else {
+        const mappedReservations = (reservasJson.data || []).map((reserva) => ({
+          id: reserva.id,
+          codigo: reserva.codigo,
+          studentName: reserva.usuario.nombre,
+          studentEmail: reserva.usuario.email,
+          university: "No informado",
+          scheduleId: reserva.horario.id,
+          departureTime: formatTime(reserva.horario.salida),
+          arrivalTime: formatTime(reserva.horario.llegada || reserva.horario.salida),
+          date: new Date(reserva.createdAt).toLocaleDateString("es-CO"),
+          status: reserva.estado.toLowerCase(),
+        }));
+
+        setReservations(mappedReservations);
+      }
+
+      if (!horariosRes.ok || !horariosJson.ok) {
+        toast.error("No se pudieron cargar horarios", {
+          description: horariosJson.message || "Intenta nuevamente",
+        });
+      } else {
+        const mappedSchedules = (horariosJson.data || []).map((horario) => ({
+          id: horario.id,
+          departureTime: formatTime(horario.salida),
+          arrivalTime: formatTime(horario.llegada || horario.salida),
+          driverId: null,
+        }));
+
+        setSchedules(mappedSchedules);
+      }
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible cargar la informacion del panel.",
+      });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchDashboardData();
+  }, []);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const handleCancelReservation = async (reservationId: string) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/admin/${reservationId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = (await response.json()) as { ok: boolean; message?: string };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo cancelar la reserva", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Reserva cancelada", {
+        description: "El cupo fue liberado correctamente.",
+      });
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible cancelar la reserva.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelByEmail = async () => {
+    const email = emailToCancel.trim().toLowerCase();
+    if (!email) {
+      toast.error("Correo requerido", {
+        description: "Ingresa el correo del estudiante a limpiar.",
+      });
+      return;
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/admin/cancelar-usuario`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = (await response.json()) as { ok: boolean; message?: string; data?: { reservasCanceladas?: number } };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo limpiar el usuario", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Reservas canceladas", {
+        description: `Se cancelaron ${result.data?.reservasCanceladas ?? 0} reserva(s).`,
+      });
+      setEmailToCancel("");
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible cancelar reservas por correo.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Get unique schedules for filter
@@ -153,16 +296,9 @@ export function AdminDashboard() {
     new Set(reservations.map((r) => `${r.departureTime} - ${r.arrivalTime}`))
   );
 
-  const filteredReservations =
-    selectedSchedule === "all"
-      ? reservations
-      : reservations.filter(
-          (r) => `${r.departureTime} - ${r.arrivalTime}` === selectedSchedule
-        );
-
   // Statistics
   const totalReservations = reservations.length;
-  const totalStudents = new Set(reservations.map((r) => r.studentId)).size;
+  const totalStudents = new Set(reservations.map((r) => r.studentEmail)).size;
 
   // Matriz de rutas - agrupar por horario
   const scheduleMatrix = schedules.map((schedule) => {
@@ -221,6 +357,14 @@ export function AdminDashboard() {
         </div>
 
         {/* Statistics Cards */}
+        {isLoadingData && (
+          <Card className="mb-6">
+            <CardContent className="py-4 text-sm text-gray-600 dark:text-gray-300">
+              Cargando informacion del panel administrativo...
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
@@ -366,17 +510,27 @@ export function AdminDashboard() {
                           {schedule.students.map((student) => (
                             <div
                               key={student.id}
-                              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 flex items-center gap-2"
+                              className="bg-gray-50 dark:bg-gray-800 rounded-lg p-2 flex items-center justify-between gap-2"
                             >
-                              <GraduationCap className="size-4 text-gray-600" />
-                              <div>
-                                <p className="text-sm font-medium">
-                                  {student.studentName}
-                                </p>
-                                <p className="text-xs text-gray-600 dark:text-gray-300">
-                                  {student.university}
-                                </p>
+                              <div className="flex items-center gap-2">
+                                <GraduationCap className="size-4 text-gray-600" />
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {student.studentName}
+                                  </p>
+                                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                                    {student.studentEmail}
+                                  </p>
+                                </div>
                               </div>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={isSubmitting}
+                                onClick={() => handleCancelReservation(student.id)}
+                              >
+                                Cancelar
+                              </Button>
                             </div>
                           ))}
                         </div>
@@ -405,6 +559,24 @@ export function AdminDashboard() {
               </p>
             </div>
 
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Cancelar reservas por estudiante</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-2 md:flex-row">
+                  <Input
+                    placeholder="correo@ejemplo.com"
+                    value={emailToCancel}
+                    onChange={(event) => setEmailToCancel(event.target.value)}
+                  />
+                  <Button onClick={handleCancelByEmail} disabled={isSubmitting}>
+                    Cancelar reservas del correo
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Tabla compacta */}
             <Card>
               <CardContent className="p-0">
@@ -423,6 +595,9 @@ export function AdminDashboard() {
                         </th>
                         <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
                           Estado
+                        </th>
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
+                          Accion
                         </th>
                       </tr>
                     </thead>
@@ -469,6 +644,11 @@ export function AdminDashboard() {
                                 Pendiente
                               </Badge>
                             )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="text-xs text-gray-500 dark:text-gray-300">
+                              Gestionar en "Matriz de Rutas"
+                            </span>
                           </td>
                         </tr>
                       ))}
