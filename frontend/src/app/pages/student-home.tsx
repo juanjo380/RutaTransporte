@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BusScheduleCard } from "../components/bus-schedule-card";
 import { ReservationDialog, ReservationData } from "../components/reservation-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -10,6 +10,10 @@ import { useTheme } from "../context/theme-context";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { MyReservations } from "../components/my-reservations";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const TOKEN_STORAGE_KEY = "ruta_transporte_token";
+const RESERVATION_DETAILS_STORAGE_KEY = "ruta_transporte_reservation_details";
 
 interface Schedule {
   id: string;
@@ -34,6 +38,62 @@ interface Reservation {
   userData: ReservationData;
   driver: Driver;
   date: string;
+}
+
+type CreateReservationResponse = {
+  ok: boolean;
+  message?: string;
+  code?: string;
+  data?: {
+    id: string;
+    codigo: string;
+    horarioId: string;
+  };
+};
+
+type HorarioOcupacionResponse = {
+  ok: boolean;
+  message?: string;
+  data?: Array<{
+    id: string;
+    cupoTotal: number;
+    cupoOcupado: number;
+  }>;
+};
+
+type MisReservasResponse = {
+  ok: boolean;
+  message?: string;
+  data?: Array<{
+    id: string;
+    codigo: string;
+    estado: string;
+    createdAt: string;
+    horario: {
+      id: string;
+      salida: string;
+      llegada: string | null;
+    };
+  }>;
+};
+
+type ReservationDetailsMap = Record<string, ReservationData>;
+
+function getReservationDetailsMap(): ReservationDetailsMap {
+  try {
+    const raw = localStorage.getItem(RESERVATION_DETAILS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    return JSON.parse(raw) as ReservationDetailsMap;
+  } catch {
+    return {};
+  }
+}
+
+function saveReservationDetailsMap(map: ReservationDetailsMap) {
+  localStorage.setItem(RESERVATION_DETAILS_STORAGE_KEY, JSON.stringify(map));
 }
 
 export function StudentHome() {
@@ -267,6 +327,109 @@ export function StudentHome() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+
+  const refreshMyReservations = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/mias`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = (await response.json()) as MisReservasResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        return;
+      }
+
+      const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+      const detailsMap = getReservationDetailsMap();
+
+      const mappedReservations: Reservation[] = result.data
+        .map((item) => {
+          const schedule = scheduleMap.get(item.horario.id);
+          if (!schedule) {
+            return null;
+          }
+
+          const savedDetails = detailsMap[item.id];
+
+          return {
+            id: item.id,
+            scheduleId: item.horario.id,
+            direction: schedule.direction,
+            origin: schedule.origin,
+            destination: schedule.destination,
+            departureTime: schedule.departureTime,
+            arrivalTime: schedule.arrivalTime,
+            userData: savedDetails || {
+              name: user?.name || "Estudiante",
+              studentId: "No registrado",
+              phone: "No registrado",
+              university: "No registrado",
+              pickupStop: "No registrado",
+              dropoffStop: "No registrado",
+            },
+            driver: schedule.driver,
+            date: new Date(item.createdAt).toLocaleDateString("es-CO"),
+          };
+        })
+        .filter((item): item is Reservation => Boolean(item));
+
+      setReservations(mappedReservations);
+    } catch {
+      // Keep current in-memory reservations if backend fetch fails.
+    }
+  };
+
+  const refreshScheduleAvailability = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios`);
+      const result = (await response.json()) as HorarioOcupacionResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        return;
+      }
+
+      const ocupacionMap = new Map(
+        result.data.map((horario) => [
+          horario.id,
+          {
+            totalSeats: horario.cupoTotal,
+            availableSeats: Math.max(0, horario.cupoTotal - horario.cupoOcupado),
+          },
+        ])
+      );
+
+      setSchedules((prev) =>
+        prev.map((schedule) => {
+          const ocupacion = ocupacionMap.get(schedule.id);
+          if (!ocupacion) {
+            return schedule;
+          }
+
+          return {
+            ...schedule,
+            totalSeats: ocupacion.totalSeats,
+            availableSeats: ocupacion.availableSeats,
+          };
+        })
+      );
+    } catch {
+      // Silently ignore refresh errors to keep static UI usable.
+    }
+  };
+
+  useEffect(() => {
+    void refreshScheduleAvailability();
+    void refreshMyReservations();
+  }, []);
+
   const idaSchedules = schedules.filter((schedule) => schedule.direction === "ida");
   const vueltaSchedules = schedules.filter((schedule) => schedule.direction === "vuelta");
 
@@ -278,56 +441,116 @@ export function StudentHome() {
     }
   };
 
-  const handleConfirmReservation = (userData: ReservationData) => {
+  const handleConfirmReservation = async (userData: ReservationData) => {
     if (!selectedSchedule) return;
 
-    const newReservation: Reservation = {
-      id: Date.now().toString(),
-      scheduleId: selectedSchedule.id,
-      direction: selectedSchedule.direction,
-      origin: selectedSchedule.origin,
-      destination: selectedSchedule.destination,
-      departureTime: selectedSchedule.departureTime,
-      arrivalTime: selectedSchedule.arrivalTime,
-      userData,
-      driver: selectedSchedule.driver,
-      date: new Date().toLocaleDateString("es-CO"),
-    };
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      toast.error("Sesion expirada", {
+        description: "Inicia sesion nuevamente para reservar.",
+      });
+      navigate("/login");
+      return;
+    }
 
-    setSchedules((prev) =>
-      prev.map((schedule) =>
-        schedule.id === selectedSchedule.id
-          ? { ...schedule, availableSeats: schedule.availableSeats - 1 }
-          : schedule
-      )
-    );
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ horarioId: selectedSchedule.id }),
+      });
 
-    setReservations((prev) => [...prev, newReservation]);
-    setDialogOpen(false);
-    setSelectedSchedule(null);
+      const result = (await response.json()) as CreateReservationResponse;
 
-    toast.success("¡Reserva confirmada!", {
-      description: `Tu cupo para llegar a las ${selectedSchedule.arrivalTime} ha sido reservado.`,
-    });
+      if (!response.ok || !result.ok || !result.data) {
+        const message = result.message || "No se pudo confirmar la reserva";
+
+        if (result.code === "CAPACIDAD_COMPLETA") {
+          toast.error("Cupo agotado", {
+            description: message,
+          });
+          return;
+        }
+
+        toast.error("No se pudo reservar", {
+          description: message,
+        });
+        return;
+      }
+
+      setSchedules((prev) =>
+        prev.map((schedule) =>
+          schedule.id === selectedSchedule.id
+            ? { ...schedule, availableSeats: Math.max(0, schedule.availableSeats - 1) }
+            : schedule
+        )
+      );
+
+      setDialogOpen(false);
+      setSelectedSchedule(null);
+
+      const detailsMap = getReservationDetailsMap();
+      detailsMap[result.data.id] = userData;
+      saveReservationDetailsMap(detailsMap);
+
+      void refreshScheduleAvailability();
+      void refreshMyReservations();
+
+      toast.success("Reserva confirmada", {
+        description: result.message || `Tu cupo para llegar a las ${selectedSchedule.arrivalTime} ha sido reservado.`,
+      });
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible conectar con el servidor de reservas.",
+      });
+    }
   };
 
-  const handleCancelReservation = (reservationId: string) => {
-    const reservation = reservations.find((r) => r.id === reservationId);
-    if (!reservation) return;
+  const handleCancelReservation = async (reservationId: string) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      toast.error("Sesion expirada", {
+        description: "Inicia sesion nuevamente.",
+      });
+      navigate("/login");
+      return;
+    }
 
-    setSchedules((prev) =>
-      prev.map((schedule) =>
-        schedule.id === reservation.scheduleId
-          ? { ...schedule, availableSeats: schedule.availableSeats + 1 }
-          : schedule
-      )
-    );
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/${reservationId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    setReservations((prev) => prev.filter((r) => r.id !== reservationId));
+      const result = (await response.json()) as { ok: boolean; message?: string };
 
-    toast.success("Reserva cancelada", {
-      description: "El cupo ha sido liberado.",
-    });
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo cancelar", {
+          description: result.message || "Intenta nuevamente.",
+        });
+        return;
+      }
+
+      const detailsMap = getReservationDetailsMap();
+      delete detailsMap[reservationId];
+      saveReservationDetailsMap(detailsMap);
+
+      void refreshScheduleAvailability();
+      void refreshMyReservations();
+
+      toast.success("Reserva cancelada", {
+        description: "El cupo ha sido liberado.",
+      });
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible cancelar la reserva.",
+      });
+    }
   };
 
   const handleLogout = () => {
