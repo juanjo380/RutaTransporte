@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/auth-context";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
@@ -6,7 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useTheme } from "../context/theme-context";
-import { Bus, LogOut, User, Clock, GraduationCap, BarChart3, Grid3x3, ListChecks, UserCog, Star, Shield, CheckCircle, Moon, Sun } from "lucide-react";
+import {
+  Bus,
+  LogOut,
+  User,
+  Clock,
+  GraduationCap,
+  BarChart3,
+  Grid3x3,
+  ListChecks,
+  UserCog,
+  CheckCircle,
+  Moon,
+  Sun,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,47 +33,16 @@ import { Input } from "../components/ui/input";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
 
-// Mock data - conductores disponibles
-const availableDrivers = [
-  {
-    id: "d1",
-    name: "Carlos Rodríguez",
-    licensePlate: "ABC-123",
-    rating: 4.8,
-    experience: "8 años",
-    verified: true,
-  },
-  {
-    id: "d2",
-    name: "María González",
-    licensePlate: "XYZ-789",
-    rating: 4.9,
-    experience: "10 años",
-    verified: true,
-  },
-  {
-    id: "d3",
-    name: "Jorge Martínez",
-    licensePlate: "DEF-456",
-    rating: 4.7,
-    experience: "6 años",
-    verified: true,
-  },
-  {
-    id: "d4",
-    name: "Andrea López",
-    licensePlate: "GHI-321",
-    rating: 5.0,
-    experience: "12 años",
-    verified: true,
-  },
-];
-
 type Schedule = {
   id: string;
   departureTime: string;
   arrivalTime: string;
   driverId: string | null;
+  driver: {
+    id: string;
+    nombre: string;
+    email: string;
+  } | null;
 };
 
 type Reservation = {
@@ -74,6 +56,16 @@ type Reservation = {
   arrivalTime: string;
   date: string;
   status: string;
+};
+
+type ReservationStatusFilter = "ACTIVA" | "CANCELADA" | "COMPLETADA";
+
+type DriverAvailability = {
+  id: string;
+  nombre: string;
+  email: string;
+  disponible: boolean;
+  asignadoEnHorario: boolean;
 };
 
 type AdminReservasResponse = {
@@ -105,7 +97,21 @@ type HorariosResponse = {
     id: string;
     salida: string;
     llegada: string | null;
+    conductor?: {
+      id: string;
+      nombre: string;
+      email: string;
+    } | null;
   }>;
+};
+
+type ConductoresDisponiblesResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    horarioId: string;
+    conductores: DriverAvailability[];
+  };
 };
 
 function formatTime(value: string | null | undefined) {
@@ -120,15 +126,46 @@ function formatTime(value: string | null | undefined) {
   });
 }
 
+function mapReservationStatusLabel(status: string) {
+  switch (status.toUpperCase()) {
+    case "ACTIVA":
+      return "Activa";
+    case "CANCELADA":
+      return "Cancelada";
+    case "COMPLETADA":
+      return "Completada";
+    default:
+      return status;
+  }
+}
+
+function mapReservationStatusBadgeClass(status: string) {
+  switch (status.toUpperCase()) {
+    case "ACTIVA":
+      return "bg-green-600";
+    case "CANCELADA":
+      return "bg-red-600";
+    case "COMPLETADA":
+      return "bg-blue-600";
+    default:
+      return "bg-gray-600";
+  }
+}
+
 export function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [availableDriversBySchedule, setAvailableDriversBySchedule] = useState<Record<string, DriverAvailability[]>>({});
+  const [selectedDriverBySchedule, setSelectedDriverBySchedule] = useState<Record<string, string>>({});
   const [emailToCancel, setEmailToCancel] = useState("");
+  const [reservationStatusFilter, setReservationStatusFilter] = useState<ReservationStatusFilter>("ACTIVA");
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAssigningScheduleId, setIsAssigningScheduleId] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -138,9 +175,13 @@ export function AdminDashboard() {
     }
 
     setIsLoadingData(true);
+
     try {
+      const reservasUrl = new URL(`${API_BASE_URL}/api/reservas/admin`);
+      reservasUrl.searchParams.set("estado", reservationStatusFilter);
+
       const [reservasRes, horariosRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/reservas/admin`, {
+        fetch(reservasUrl.toString(), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -166,7 +207,7 @@ export function AdminDashboard() {
           departureTime: formatTime(reserva.horario.salida),
           arrivalTime: formatTime(reserva.horario.llegada || reserva.horario.salida),
           date: new Date(reserva.createdAt).toLocaleDateString("es-CO"),
-          status: reserva.estado.toLowerCase(),
+          status: reserva.estado,
         }));
 
         setReservations(mappedReservations);
@@ -176,15 +217,46 @@ export function AdminDashboard() {
         toast.error("No se pudieron cargar horarios", {
           description: horariosJson.message || "Intenta nuevamente",
         });
+        setSchedules([]);
+        setAvailableDriversBySchedule({});
       } else {
         const mappedSchedules = (horariosJson.data || []).map((horario) => ({
           id: horario.id,
           departureTime: formatTime(horario.salida),
           arrivalTime: formatTime(horario.llegada || horario.salida),
-          driverId: null,
+          driverId: horario.conductor?.id || null,
+          driver: horario.conductor || null,
         }));
 
         setSchedules(mappedSchedules);
+        setSelectedDriverBySchedule(
+          Object.fromEntries(
+            mappedSchedules.map((schedule) => [schedule.id, schedule.driverId || ""])
+          )
+        );
+
+        const availabilityEntries = await Promise.all(
+          mappedSchedules.map(async (schedule) => {
+            const response = await fetch(
+              `${API_BASE_URL}/api/horarios/admin/conductores-disponibles?horarioId=${encodeURIComponent(schedule.id)}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            const json = (await response.json()) as ConductoresDisponiblesResponse;
+
+            if (!response.ok || !json.ok) {
+              return [schedule.id, [] as DriverAvailability[]] as const;
+            }
+
+            return [schedule.id, json.data?.conductores || []] as const;
+          })
+        );
+
+        setAvailableDriversBySchedule(Object.fromEntries(availabilityEntries));
       }
     } catch {
       toast.error("Error de conexion", {
@@ -197,7 +269,7 @@ export function AdminDashboard() {
 
   useEffect(() => {
     void fetchDashboardData();
-  }, []);
+  }, [reservationStatusFilter]);
 
   const handleLogout = () => {
     logout();
@@ -268,7 +340,11 @@ export function AdminDashboard() {
         body: JSON.stringify({ email }),
       });
 
-      const result = (await response.json()) as { ok: boolean; message?: string; data?: { reservasCanceladas?: number } };
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        data?: { reservasCanceladas?: number };
+      };
 
       if (!response.ok || !result.ok) {
         toast.error("No se pudo limpiar el usuario", {
@@ -291,46 +367,146 @@ export function AdminDashboard() {
     }
   };
 
-  // Get unique schedules for filter
-  const scheduleOptions = Array.from(
-    new Set(reservations.map((r) => `${r.departureTime} - ${r.arrivalTime}`))
-  );
+  const handleAssignDriver = async (scheduleId: string, driverId: string) => {
+    const schedule = schedules.find((item) => item.id === scheduleId);
+    const driver = (availableDriversBySchedule[scheduleId] || []).find((item) => item.id === driverId);
 
-  // Statistics
-  const totalReservations = reservations.length;
-  const totalStudents = new Set(reservations.map((r) => r.studentEmail)).size;
-
-  // Matriz de rutas - agrupar por horario
-  const scheduleMatrix = schedules.map((schedule) => {
-    const studentsInSchedule = reservations.filter(
-      (r) => r.scheduleId === schedule.id
+    const confirmation = window.confirm(
+      `Confirmar asignacion de ${driver?.nombre || "conductor"} al horario ${schedule?.departureTime || ""} - ${schedule?.arrivalTime || ""}?`
     );
-    const driver = availableDrivers.find((d) => d.id === schedule.driverId);
+
+    if (!confirmation) {
+      return;
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsAssigningScheduleId(scheduleId);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios/admin/asignar-conductor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ horarioId: scheduleId, conductorId: driverId }),
+      });
+
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo confirmar la asignacion", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Asignacion confirmada", {
+        description: `${driver?.nombre || "Conductor"} fue asignado correctamente.`,
+      });
+
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible confirmar la asignacion.",
+      });
+    } finally {
+      setIsAssigningScheduleId(null);
+    }
+  };
+
+  const handleUnassignDriver = async (scheduleId: string) => {
+    const schedule = schedules.find((item) => item.id === scheduleId);
+
+    const confirmation = window.confirm(
+      `Confirmar desasignacion del conductor para el horario ${schedule?.departureTime || ""} - ${schedule?.arrivalTime || ""}?`
+    );
+
+    if (!confirmation) {
+      return;
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsAssigningScheduleId(scheduleId);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios/admin/desasignar-conductor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ horarioId: scheduleId }),
+      });
+
+      const result = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo confirmar la desasignacion", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Desasignacion confirmada", {
+        description: "El horario quedo sin conductor asignado.",
+      });
+
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible desasignar el conductor.",
+      });
+    } finally {
+      setIsAssigningScheduleId(null);
+    }
+  };
+
+  const scheduleMatrix = schedules.map((schedule) => {
+    const studentsInSchedule = reservations.filter((reservation) => reservation.scheduleId === schedule.id);
+
     return {
       ...schedule,
-      driver,
       studentCount: studentsInSchedule.length,
       students: studentsInSchedule,
     };
   });
 
-  // Asignar conductor a ruta
-  const handleAssignDriver = (scheduleId: string, driverId: string) => {
-    setSchedules((prev) =>
-      prev.map((s) =>
-        s.id === scheduleId ? { ...s, driverId: driverId } : s
-      )
-    );
-    const driver = availableDrivers.find((d) => d.id === driverId);
-    toast.success("Conductor asignado", {
-      description: `${driver?.name} ha sido asignado a la ruta.`,
+  const allAvailableDrivers = useMemo(() => {
+    const allDrivers = Object.values(availableDriversBySchedule).flat();
+    const uniqueMap = new Map<string, DriverAvailability>();
+
+    allDrivers.forEach((driver) => {
+      if (!uniqueMap.has(driver.id)) {
+        uniqueMap.set(driver.id, driver);
+      }
     });
-  };
+
+    return Array.from(uniqueMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [availableDriversBySchedule]);
+
+  const totalReservations = reservations.length;
+  const totalStudents = new Set(reservations.map((reservation) => reservation.studentEmail)).size;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -356,7 +532,6 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* Statistics Cards */}
         {isLoadingData && (
           <Card className="mb-6">
             <CardContent className="py-4 text-sm text-gray-600 dark:text-gray-300">
@@ -368,25 +543,19 @@ export function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                Total Reservas
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Reservas</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <BarChart3 className="size-8 text-purple-600" />
-                <span className="text-3xl font-bold text-purple-900 dark:text-purple-200">
-                  {totalReservations}
-                </span>
+                <span className="text-3xl font-bold text-purple-900 dark:text-purple-200">{totalReservations}</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                Estudiantes Únicos
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Estudiantes Únicos</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -398,22 +567,17 @@ export function AdminDashboard() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                Horarios Activos
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Horarios Activos</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Clock className="size-8 text-green-600" />
-                <span className="text-3xl font-bold text-green-900 dark:text-green-200">
-                  {scheduleOptions.length}
-                </span>
+                <span className="text-3xl font-bold text-green-900 dark:text-green-200">{schedules.length}</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Tabs para diferentes vistas */}
         <Tabs defaultValue="matrix" className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="matrix" className="flex items-center gap-2">
@@ -430,12 +594,9 @@ export function AdminDashboard() {
             </TabsTrigger>
           </TabsList>
 
-          {/* MATRIZ DE RUTAS */}
           <TabsContent value="matrix" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">
-                Matriz de rutas del día
-              </h2>
+              <h2 className="font-semibold text-gray-800 mb-2">Matriz de rutas del día</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 Visualización completa de todos los horarios, conductores asignados y estudiantes
               </p>
@@ -451,20 +612,15 @@ export function AdminDashboard() {
                           <Clock className="size-5 text-purple-600" />
                           {schedule.departureTime} - {schedule.arrivalTime}
                         </CardTitle>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                          Ruta: Buga → Tuluá
-                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Ruta: Buga → Tuluá</p>
                       </div>
                       <div className="text-right">
-                        <div className="text-3xl font-bold text-purple-900 dark:text-purple-200">
-                          {schedule.studentCount}
-                        </div>
+                        <div className="text-3xl font-bold text-purple-900 dark:text-purple-200">{schedule.studentCount}</div>
                         <p className="text-xs text-gray-600 dark:text-gray-300">Estudiantes</p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {/* Conductor asignado */}
                     {schedule.driver ? (
                       <div className="bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-900/40 rounded-lg p-3">
                         <div className="flex items-center justify-between">
@@ -473,17 +629,8 @@ export function AdminDashboard() {
                               <Bus className="size-5 text-white" />
                             </div>
                             <div>
-                              <p className="font-semibold text-green-900 dark:text-green-200">
-                                {schedule.driver.name}
-                              </p>
-                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                                <span>Placa: {schedule.driver.licensePlate}</span>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                                  {schedule.driver.rating}
-                                </span>
-                              </div>
+                              <p className="font-semibold text-green-900 dark:text-green-200">{schedule.driver.nombre}</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-300">{schedule.driver.email}</p>
                             </div>
                           </div>
                           <Badge className="bg-green-600 flex items-center gap-1">
@@ -494,18 +641,13 @@ export function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="bg-yellow-50 border border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-900/40 rounded-lg p-3">
-                        <p className="text-sm text-yellow-800 font-medium">
-                          ⚠️ Sin conductor asignado
-                        </p>
+                        <p className="text-sm text-yellow-800 font-medium">Sin conductor asignado</p>
                       </div>
                     )}
 
-                    {/* Lista de estudiantes */}
                     {schedule.studentCount > 0 ? (
                       <div className="border-t pt-3">
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                          Estudiantes registrados:
-                        </p>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Estudiantes registrados:</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {schedule.students.map((student) => (
                             <div
@@ -515,18 +657,17 @@ export function AdminDashboard() {
                               <div className="flex items-center gap-2">
                                 <GraduationCap className="size-4 text-gray-600" />
                                 <div>
-                                  <p className="text-sm font-medium">
-                                    {student.studentName}
-                                  </p>
-                                  <p className="text-xs text-gray-600 dark:text-gray-300">
-                                    {student.studentEmail}
-                                  </p>
+                                  <p className="text-sm font-medium">{student.studentName}</p>
+                                  <p className="text-xs text-gray-600 dark:text-gray-300">{student.studentEmail}</p>
+                                  <Badge className={`mt-1 text-xs ${mapReservationStatusBadgeClass(student.status)}`}>
+                                    {mapReservationStatusLabel(student.status)}
+                                  </Badge>
                                 </div>
                               </div>
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || student.status !== "ACTIVA"}
                                 onClick={() => handleCancelReservation(student.id)}
                               >
                                 Cancelar
@@ -537,9 +678,7 @@ export function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="border-t pt-3">
-                        <p className="text-sm text-gray-500 text-center py-2">
-                          No hay estudiantes registrados en este horario
-                        </p>
+                        <p className="text-sm text-gray-500 text-center py-2">No hay estudiantes registrados en este horario</p>
                       </div>
                     )}
                   </CardContent>
@@ -548,15 +687,25 @@ export function AdminDashboard() {
             </div>
           </TabsContent>
 
-          {/* VISTA RÁPIDA */}
           <TabsContent value="quick" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">
-                Vista rápida de ocupación
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Resumen compacto de cuántos estudiantes hay en cada horario
-              </p>
+              <h2 className="font-semibold text-gray-800 mb-2">Vista rápida de ocupación</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Resumen compacto de cuántos estudiantes hay en cada horario</p>
+              <div className="mt-3 max-w-xs">
+                <Select
+                  value={reservationStatusFilter}
+                  onValueChange={(value) => setReservationStatusFilter(value as ReservationStatusFilter)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filtrar por estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVA">Activas</SelectItem>
+                    <SelectItem value="CANCELADA">Canceladas</SelectItem>
+                    <SelectItem value="COMPLETADA">Completadas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Card>
@@ -577,28 +726,17 @@ export function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Tabla compacta */}
             <Card>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-purple-100 dark:bg-gray-800/70">
                       <tr>
-                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
-                          Horario
-                        </th>
-                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
-                          Conductor
-                        </th>
-                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
-                          Estudiantes
-                        </th>
-                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
-                          Estado
-                        </th>
-                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">
-                          Accion
-                        </th>
+                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">Horario</th>
+                        <th className="text-left p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">Conductor</th>
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">Estudiantes</th>
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">Estado</th>
+                        <th className="text-center p-3 text-sm font-semibold text-purple-900 dark:text-purple-200">Accion</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -618,22 +756,16 @@ export function AdminDashboard() {
                           <td className="p-3">
                             {schedule.driver ? (
                               <div>
-                                <p className="font-medium">{schedule.driver.name}</p>
-                                <p className="text-xs text-gray-600 dark:text-gray-300">
-                                  {schedule.driver.licensePlate}
-                                </p>
+                                <p className="font-medium">{schedule.driver.nombre}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-300">{schedule.driver.email}</p>
                               </div>
                             ) : (
-                              <span className="text-sm text-gray-400 italic">
-                                Sin asignar
-                              </span>
+                              <span className="text-sm text-gray-400 italic">Sin asignar</span>
                             )}
                           </td>
                           <td className="p-3 text-center">
                             <div className="inline-flex items-center justify-center bg-purple-100 dark:bg-gray-700 rounded-full px-3 py-1">
-                              <span className="text-lg font-bold text-purple-900 dark:text-purple-200">
-                                {schedule.studentCount}
-                              </span>
+                              <span className="text-lg font-bold text-purple-900 dark:text-purple-200">{schedule.studentCount}</span>
                             </div>
                           </td>
                           <td className="p-3 text-center">
@@ -646,9 +778,7 @@ export function AdminDashboard() {
                             )}
                           </td>
                           <td className="p-3 text-center">
-                            <span className="text-xs text-gray-500 dark:text-gray-300">
-                              Gestionar en "Matriz de Rutas"
-                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-300">Gestionar en "Asignar Conductores"</span>
                           </td>
                         </tr>
                       ))}
@@ -658,20 +788,17 @@ export function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Resumen */}
             <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-300">Total de estudiantes transportados hoy</p>
-                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">
-                      {totalReservations}
-                    </p>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">{totalReservations}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600 dark:text-gray-300">Rutas con conductor asignado</p>
                     <p className="text-3xl font-bold text-green-700">
-                      {scheduleMatrix.filter((s) => s.driver).length}/{schedules.length}
+                      {scheduleMatrix.filter((item) => item.driver).length}/{schedules.length}
                     </p>
                   </div>
                 </div>
@@ -679,66 +806,44 @@ export function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* ASIGNAR CONDUCTORES */}
           <TabsContent value="assign" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">
-                Asignar conductores a rutas
-              </h2>
+              <h2 className="font-semibold text-gray-800 mb-2">Asignar conductores a rutas</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Gestiona qué conductor estará a cargo de cada horario
+                Se muestran solo conductores disponibles por horario. La asignación solicita confirmación.
               </p>
             </div>
 
-            {/* Lista de conductores disponibles */}
             <Card className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-gray-900 dark:to-gray-800">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Shield className="size-5 text-green-600" />
+                  <User className="size-5 text-green-600" />
                   Conductores disponibles
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {availableDrivers.map((driver) => (
-                    <div
-                      key={driver.id}
-                      className="bg-white dark:bg-gray-900 rounded-lg p-3 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="bg-green-100 p-2 rounded-lg">
-                          <User className="size-5 text-green-700" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{driver.name}</p>
-                          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-                            <span>{driver.licensePlate}</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                              {driver.rating}
-                            </span>
-                          </div>
-                        </div>
+                {allAvailableDrivers.length === 0 ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-300">No hay conductores registrados.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {allAvailableDrivers.map((driver) => (
+                      <div key={driver.id} className="bg-white dark:bg-gray-900 rounded-lg p-3">
+                        <p className="font-medium">{driver.nombre}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">{driver.email}</p>
                       </div>
-                      {driver.verified && (
-                        <Badge className="bg-green-600">
-                          <CheckCircle className="size-3 mr-1" />
-                          Verificado
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Formulario de asignación */}
             <div className="space-y-3">
               {schedules.map((schedule) => {
-                const currentDriver = availableDrivers.find(
-                  (d) => d.id === schedule.driverId
+                const driversForSchedule = availableDriversBySchedule[schedule.id] || [];
+                const selectableDrivers = driversForSchedule.filter(
+                  (driver) => driver.disponible || driver.id === schedule.driverId
                 );
+
                 return (
                   <Card key={schedule.id}>
                     <CardHeader className="pb-3">
@@ -747,47 +852,64 @@ export function AdminDashboard() {
                           <Clock className="size-5 text-purple-600" />
                           {schedule.departureTime} - {schedule.arrivalTime}
                         </CardTitle>
-                        {currentDriver && (
-                          <Badge className="bg-green-600">Asignado</Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{selectableDrivers.length} disponibles</Badge>
+                          {schedule.driver && <Badge className="bg-green-600">Asignado</Badge>}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center gap-3">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">
-                          Conductor:
-                        </label>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-200 min-w-[120px]">Conductor:</label>
                         <Select
-                          value={schedule.driverId || ""}
-                          onValueChange={(value) =>
-                            handleAssignDriver(schedule.id, value)
-                          }
+                          value={selectedDriverBySchedule[schedule.id] || undefined}
+                          onValueChange={(value) => {
+                            setSelectedDriverBySchedule((prev) => ({
+                              ...prev,
+                              [schedule.id]: value,
+                            }));
+                          }}
                         >
                           <SelectTrigger className="flex-1">
                             <SelectValue placeholder="Seleccionar conductor" />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableDrivers.map((driver) => (
+                            {selectableDrivers.map((driver) => (
                               <SelectItem key={driver.id} value={driver.id}>
                                 <div className="flex items-center gap-2">
-                                  <span>{driver.name}</span>
-                                  <span className="text-xs text-gray-500">
-                                    ({driver.licensePlate})
-                                  </span>
-                                  <span className="text-xs flex items-center gap-1">
-                                    <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                                    {driver.rating}
-                                  </span>
+                                  <span>{driver.nombre}</span>
+                                  <span className="text-xs text-gray-500">({driver.email})</span>
                                 </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button
+                          variant="outline"
+                          disabled={isAssigningScheduleId === schedule.id || !selectedDriverBySchedule[schedule.id]}
+                          onClick={() => {
+                            const selectedDriverId = selectedDriverBySchedule[schedule.id];
+                            if (selectedDriverId) {
+                              void handleAssignDriver(schedule.id, selectedDriverId);
+                            }
+                          }}
+                        >
+                          Confirmar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          disabled={isAssigningScheduleId === schedule.id || !schedule.driverId}
+                          onClick={() => {
+                            void handleUnassignDriver(schedule.id);
+                          }}
+                        >
+                          Desasignar
+                        </Button>
                       </div>
-                      {currentDriver && (
+                      {schedule.driver && (
                         <div className="mt-3 bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-900/40 rounded-lg p-2">
                           <p className="text-xs text-green-800 dark:text-green-200">
-                            ✓ {currentDriver.name} - {currentDriver.licensePlate} - {currentDriver.experience} de experiencia
+                            Asignado actualmente: {schedule.driver.nombre} ({schedule.driver.email})
                           </p>
                         </div>
                       )}

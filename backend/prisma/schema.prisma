@@ -15,6 +15,7 @@ model Usuario {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   reservas  Reserva[]
+  horariosConducidos Horario[] @relation("ConductorHorarios")
 }
 
 model Ruta {
@@ -32,6 +33,8 @@ model Horario {
   id         String     @id @default(cuid())
   rutaId     String
   ruta       Ruta       @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+  conductorId String?
+  conductor  Usuario?   @relation("ConductorHorarios", fields: [conductorId], references: [id], onDelete: SetNull)
   salida     DateTime
   llegada    DateTime?
   cupoTotal  Int
@@ -40,6 +43,8 @@ model Horario {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   reservas   Reserva[]
+
+  @@index([conductorId])
 }
 
 model Reserva {

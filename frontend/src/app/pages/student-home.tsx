@@ -58,6 +58,11 @@ type HorarioOcupacionResponse = {
     id: string;
     cupoTotal: number;
     cupoOcupado: number;
+    conductor?: {
+      id: string;
+      nombre: string;
+      email: string;
+    } | null;
   }>;
 };
 
@@ -94,6 +99,38 @@ function getReservationDetailsMap(): ReservationDetailsMap {
 
 function saveReservationDetailsMap(map: ReservationDetailsMap) {
   localStorage.setItem(RESERVATION_DETAILS_STORAGE_KEY, JSON.stringify(map));
+}
+
+function mapConductorToDriver(
+  conductor?: {
+    id: string;
+    nombre: string;
+    email: string;
+  } | null
+): Driver {
+  if (!conductor) {
+    return {
+      id: "unassigned",
+      name: "Conductor por asignar",
+      phone: "No disponible",
+      rating: 0,
+      experience: "Por definir",
+      licensePlate: "Sin placa",
+      verified: false,
+      totalTrips: 0,
+    };
+  }
+
+  return {
+    id: conductor.id,
+    name: conductor.nombre,
+    phone: conductor.email,
+    rating: 0,
+    experience: "No informada",
+    licensePlate: "No informada",
+    verified: true,
+    totalTrips: 0,
+  };
 }
 
 export function StudentHome() {
@@ -328,7 +365,7 @@ export function StudentHome() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
-  const refreshMyReservations = async () => {
+  const refreshMyReservations = async (schedulesSource?: Schedule[]) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
       return;
@@ -347,7 +384,8 @@ export function StudentHome() {
         return;
       }
 
-      const scheduleMap = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+      const source = schedulesSource || schedules;
+      const scheduleMap = new Map(source.map((schedule) => [schedule.id, schedule]));
       const detailsMap = getReservationDetailsMap();
 
       const mappedReservations: Reservation[] = result.data
@@ -402,12 +440,12 @@ export function StudentHome() {
           {
             totalSeats: horario.cupoTotal,
             availableSeats: Math.max(0, horario.cupoTotal - horario.cupoOcupado),
+            driver: mapConductorToDriver(horario.conductor),
           },
         ])
       );
 
-      setSchedules((prev) =>
-        prev.map((schedule) => {
+      const nextSchedules = schedules.map((schedule) => {
           const ocupacion = ocupacionMap.get(schedule.id);
           if (!ocupacion) {
             return schedule;
@@ -417,17 +455,26 @@ export function StudentHome() {
             ...schedule,
             totalSeats: ocupacion.totalSeats,
             availableSeats: ocupacion.availableSeats,
+            driver: ocupacion.driver,
           };
-        })
-      );
+
+      });
+
+      setSchedules(nextSchedules);
+      return nextSchedules;
     } catch {
       // Silently ignore refresh errors to keep static UI usable.
+      return null;
     }
   };
 
   useEffect(() => {
-    void refreshScheduleAvailability();
-    void refreshMyReservations();
+    const loadData = async () => {
+      const updatedSchedules = await refreshScheduleAvailability();
+      await refreshMyReservations(updatedSchedules || undefined);
+    };
+
+    void loadData();
   }, []);
 
   const idaSchedules = schedules.filter((schedule) => schedule.direction === "ida");
@@ -496,8 +543,8 @@ export function StudentHome() {
       detailsMap[result.data.id] = userData;
       saveReservationDetailsMap(detailsMap);
 
-      void refreshScheduleAvailability();
-      void refreshMyReservations();
+      const updatedSchedules = await refreshScheduleAvailability();
+      await refreshMyReservations(updatedSchedules || undefined);
 
       toast.success("Reserva confirmada", {
         description: result.message || `Tu cupo para llegar a las ${selectedSchedule.arrivalTime} ha sido reservado.`,
@@ -540,8 +587,8 @@ export function StudentHome() {
       delete detailsMap[reservationId];
       saveReservationDetailsMap(detailsMap);
 
-      void refreshScheduleAvailability();
-      void refreshMyReservations();
+      const updatedSchedules = await refreshScheduleAvailability();
+      await refreshMyReservations(updatedSchedules || undefined);
 
       toast.success("Reserva cancelada", {
         description: "El cupo ha sido liberado.",
