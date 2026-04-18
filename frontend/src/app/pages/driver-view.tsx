@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../context/theme-context";
 import { useAuth } from "../context/auth-context";
 import { useNavigate } from "react-router-dom";
@@ -12,119 +12,138 @@ import {
   Clock,
   MapPin,
   Users,
-  Star,
   Shield,
   Route,
   GraduationCap,
-  Phone,
   Moon,
-  Sun,      
+  Sun,
 } from "lucide-react";
+import { toast } from "sonner";
 
-// Mock data para el conductor
-const driverSchedules = {
-  d1: {
-    // Carlos Rodríguez
-    name: "Carlos Rodríguez",
-    licensePlate: "ABC-123",
-    rating: 4.8,
-    totalTrips: 1200,
-    todaySchedules: [
-      {
-        id: "1",
-        departureTime: "06:00 AM",
-        arrivalTime: "07:00 AM",
-        students: [
-          {
-            name: "Ana García Pérez",
-            studentId: "2021001234",
-            university: "Universidad del Valle",
-            phone: "300-555-0001",
-            pickupPoint: "Terminal Buga",
-          },
-          {
-            name: "Luis Martínez López",
-            studentId: "2020987654",
-            university: "Universidad del Valle",
-            phone: "301-555-0002",
-            pickupPoint: "Terminal Buga",
-          },
-        ],
-      },
-      {
-        id: "4",
-        departureTime: "04:00 PM",
-        arrivalTime: "05:00 PM",
-        students: [
-          {
-            name: "Carlos Hernández",
-            studentId: "2019123456",
-            university: "Universidad del Valle",
-            phone: "303-555-0004",
-            pickupPoint: "Terminal Buga",
-          },
-        ],
-      },
-    ],
-  },
-  d2: {
-    // María González
-    name: "María González",
-    licensePlate: "XYZ-789",
-    rating: 4.9,
-    totalTrips: 1500,
-    todaySchedules: [
-      {
-        id: "2",
-        departureTime: "08:00 AM",
-        arrivalTime: "09:00 AM",
-        students: [
-          {
-            name: "María Rodríguez Sánchez",
-            studentId: "2021567890",
-            university: "Universidad Autónoma",
-            phone: "302-555-0003",
-            pickupPoint: "Terminal Buga",
-          },
-        ],
-      },
-    ],
-  },
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const TOKEN_STORAGE_KEY = "ruta_transporte_token";
+
+type DriverReservation = {
+  id: string;
+  codigo: string;
+  usuario: {
+    id: string;
+    nombre: string;
+    email: string;
+  };
 };
+
+type DriverSchedule = {
+  id: string;
+  salida: string;
+  llegada: string | null;
+  ruta: {
+    nombre: string;
+    origen: string;
+    destino: string;
+  };
+  reservas: DriverReservation[];
+};
+
+type DriverViewResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    conductor: {
+      id: string;
+      nombre: string;
+      email: string;
+    };
+    horarios: DriverSchedule[];
+  };
+};
+
+function formatTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
 export function DriverView() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const driverId = user?.driverId || "d1";
-  const driverData = driverSchedules[driverId as keyof typeof driverSchedules];
 
-  const [selectedSchedule, setSelectedSchedule] = useState<string | null>(
-    driverData?.todaySchedules[0]?.id || null
-  );
+  const [schedules, setSchedules] = useState<DriverSchedule[]>([]);
+  const [driverInfo, setDriverInfo] = useState<{ id: string; nombre: string; email: string } | null>(null);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  if (!driverData) {
-    return <div>Error: Conductor no encontrado</div>;
-  }
+  const fetchDriverData = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-  const currentSchedule = driverData.todaySchedules.find(
-    (s) => s.id === selectedSchedule
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios/conductor/mis-horarios`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = (await response.json()) as DriverViewResponse;
+      const payload = json.data;
+
+      if (!response.ok || !json.ok || !payload) {
+        toast.error("No se pudo cargar la agenda del conductor", {
+          description: json.message || "Intenta nuevamente.",
+        });
+        return;
+      }
+
+      setDriverInfo(payload.conductor);
+      setSchedules(payload.horarios || []);
+
+      if (payload.horarios.length > 0) {
+        setSelectedScheduleId((prev) => prev || payload.horarios[0].id);
+      } else {
+        setSelectedScheduleId(null);
+      }
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible cargar la agenda.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchDriverData();
+  }, []);
+
+  const selectedSchedule = useMemo(
+    () => schedules.find((schedule) => schedule.id === selectedScheduleId) || null,
+    [schedules, selectedScheduleId]
   );
 
-  const totalStudentsToday = driverData.todaySchedules.reduce(
-    (acc, schedule) => acc + schedule.students.length,
-    0
+  const totalStudentsToday = useMemo(
+    () => schedules.reduce((acc, schedule) => acc + schedule.reservas.length, 0),
+    [schedules]
   );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
       <div className="max-w-5xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -152,41 +171,41 @@ export function DriverView() {
           </div>
         </div>
 
-        {/* Driver Info Card */}
+        {isLoading && (
+          <Card className="mb-6">
+            <CardContent className="py-4 text-sm text-gray-600 dark:text-gray-300">
+              Cargando agenda del conductor...
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="mb-6 bg-gradient-to-r from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="size-5 text-green-600" />
-              Información del Conductor
+              Informacion del Conductor
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center gap-2">
                 <Bus className="size-5 text-gray-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Placa</p>
-                  <p className="font-semibold">{driverData.licensePlate}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="size-5 text-yellow-500" />
-                <div>
-                  <p className="text-xs text-gray-500">Calificación</p>
-                  <p className="font-semibold">{driverData.rating}/5.0</p>
+                  <p className="text-xs text-gray-500">Conductor</p>
+                  <p className="font-semibold">{driverInfo?.nombre || user?.name || "-"}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Route className="size-5 text-blue-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Viajes totales</p>
-                  <p className="font-semibold">{driverData.totalTrips}</p>
+                  <p className="text-xs text-gray-500">Horarios asignados</p>
+                  <p className="font-semibold">{schedules.length}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="size-5 text-green-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Pasajeros hoy</p>
+                  <p className="text-xs text-gray-500">Pasajeros activos</p>
                   <p className="font-semibold">{totalStudentsToday}</p>
                 </div>
               </div>
@@ -194,118 +213,87 @@ export function DriverView() {
           </CardContent>
         </Card>
 
-        {/* Schedule Selector */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Clock className="size-5" />
-              Mis horarios de hoy
+              Mis horarios
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {driverData.todaySchedules.map((schedule) => (
-                <Button
-                  key={schedule.id}
-                  variant={selectedSchedule === schedule.id ? "default" : "outline"}
-                  onClick={() => setSelectedSchedule(schedule.id)}
-                  className="flex items-center gap-2"
-                >
-                  <Clock className="size-4" />
-                  {schedule.departureTime} - {schedule.arrivalTime}
-                  <Badge
-                    variant="secondary"
-                    className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
+            {schedules.length === 0 ? (
+              <p className="text-sm text-gray-600 dark:text-gray-300">No tienes horarios asignados actualmente.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {schedules.map((schedule) => (
+                  <Button
+                    key={schedule.id}
+                    variant={selectedScheduleId === schedule.id ? "default" : "outline"}
+                    onClick={() => setSelectedScheduleId(schedule.id)}
+                    className="flex items-center gap-2"
                   >
-                    {schedule.students.length} estudiantes
-                  </Badge>
-                </Button>
-              ))}
-            </div>
+                    <Clock className="size-4" />
+                    {formatTime(schedule.salida)} - {formatTime(schedule.llegada || schedule.salida)}
+                    <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
+                      {schedule.reservas.length} pasajeros
+                    </Badge>
+                  </Button>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Current Schedule Details */}
-        {currentSchedule && (
+        {selectedSchedule && (
           <>
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
-                    Ruta: {currentSchedule.departureTime} - {currentSchedule.arrivalTime}
+                    Ruta: {formatTime(selectedSchedule.salida)} - {formatTime(selectedSchedule.llegada || selectedSchedule.salida)}
                   </h2>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                     <MapPin className="size-4" />
-                    <span>Buga → Tuluá</span>
+                    <span>
+                      {selectedSchedule.ruta?.origen || "-"} {"->"} {selectedSchedule.ruta?.destino || "-"}
+                    </span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-green-700">
-                    {currentSchedule.students.length}
-                  </p>
-                  <p className="text-xs text-gray-600 dark:text-gray-300">Estudiantes</p>
+                  <p className="text-2xl font-bold text-green-700">{selectedSchedule.reservas.length}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Pasajeros</p>
                 </div>
               </div>
             </div>
 
-            {/* Students List */}
             <div className="space-y-3">
-              {currentSchedule.students.length === 0 ? (
+              {selectedSchedule.reservas.length === 0 ? (
                 <Card>
                   <CardContent className="py-8 text-center text-gray-500">
-                    No hay estudiantes registrados en este horario
+                    No hay pasajeros activos en este horario
                   </CardContent>
                 </Card>
               ) : (
-                currentSchedule.students.map((student, index) => (
-                  <Card key={index}>
+                selectedSchedule.reservas.map((reservation, index) => (
+                  <Card key={reservation.id}>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <div className="bg-green-100 dark:bg-green-900/30 rounded-full size-10 flex items-center justify-center">
-                            <span className="font-semibold text-green-700 dark:text-green-200">
-                              {index + 1}
-                            </span>
+                            <span className="font-semibold text-green-700 dark:text-green-200">{index + 1}</span>
                           </div>
                           <div>
-                            <CardTitle className="text-base">
-                              {student.name}
-                            </CardTitle>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                              {student.university}
-                            </p>
+                            <CardTitle className="text-base">{reservation.usuario.nombre}</CardTitle>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">{reservation.usuario.email}</p>
                           </div>
                         </div>
                         <Badge className="bg-green-600">Confirmado</Badge>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="flex items-center gap-2">
-                          <GraduationCap className="size-4 text-gray-500" />
-                          <div>
-                            <p className="text-xs text-gray-500">Código</p>
-                            <p className="text-sm font-medium">
-                              {student.studentId}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="size-4 text-gray-500" />
-                          <div>
-                            <p className="text-xs text-gray-500">Teléfono</p>
-                            <p className="text-sm font-medium">{student.phone}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="size-4 text-gray-500" />
-                          <div>
-                            <p className="text-xs text-gray-500">Punto de recogida</p>
-                            <p className="text-sm font-medium">
-                              {student.pickupPoint}
-                            </p>
-                          </div>
-                        </div>
+                    <CardContent className="pt-0">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                        <GraduationCap className="size-4" />
+                        Codigo reserva: {reservation.codigo}
                       </div>
                     </CardContent>
                   </Card>
