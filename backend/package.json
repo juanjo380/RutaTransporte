@@ -17,6 +17,11 @@
     "seed:upsert": "node scripts/seed-users.js --mode=upsert",
     "seed:sync": "node scripts/seed-users.js --mode=sync"
   },
+  "_seedNotes": {
+    "create": "Crear solo nuevos: npm run seed:create",
+    "upsert": "Crear o actualizar existentes: npm run seed o npm run seed:upsert",
+    "sync": "Sincronizar exacto (crear, actualizar y eliminar no listados): npm run seed:sync"
+  },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
@@ -35,3 +40,5 @@
     "prisma": "^7.7.0"
   }
 }
+
+

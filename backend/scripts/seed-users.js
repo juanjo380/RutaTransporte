@@ -6,21 +6,27 @@ const VALID_MODES = new Set(["create", "upsert", "sync"]);
 
 const users = [
   {
-    nombre: "Juan Pérez",
-    email: "juan.perez@univ.edu",
-    password: "Student123!",
+    nombre: "Juan Sebastián Pérez",
+    email: "juansespe@gmail.com",
+    password: "1234",
     rol: "ESTUDIANTE",
   },
   {
-    nombre: "Carlos Rodríguez",
-    email: "carlos.driver@univ.edu",
+    nombre: "Juan José Bolaños",
+    email: "juanjosebose380@gmail.com",
+    password: "Trabajos380.",
+    rol: "ESTUDIANTE",
+  },
+  {
+    nombre: "Fabian Garcia",
+    email: "fabiangarcia@univ.edu",
     password: "Driver123!",
     rol: "CONDUCTOR",
   },
   {
-    nombre: "María González",
-    email: "maria.driver@univ.edu",
-    password: "Driver123!",
+    nombre: "Jeison Amado",
+    email: "jeisonamado@univ.edu",
+    password: "1234",
     rol: "CONDUCTOR",
   },
   {
