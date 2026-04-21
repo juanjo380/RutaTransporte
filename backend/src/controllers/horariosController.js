@@ -27,6 +27,14 @@ export async function listarHorarios(req, res) {
 				llegada: true,
 				cupoTotal: true,
 				cupoOcupado: true,
+				ruta: {
+					select: {
+						id: true,
+						nombre: true,
+						origen: true,
+						destino: true,
+					},
+				},
 				conductor: {
 					select: {
 						id: true,

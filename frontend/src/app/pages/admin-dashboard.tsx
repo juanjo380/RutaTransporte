@@ -37,6 +37,14 @@ type Schedule = {
   id: string;
   departureTime: string;
   arrivalTime: string;
+  cupoTotal: number;
+  cupoOcupado: number;
+  route: {
+    id: string;
+    nombre: string;
+    origen: string;
+    destino: string;
+  } | null;
   driverId: string | null;
   driver: {
     id: string;
@@ -97,6 +105,14 @@ type HorariosResponse = {
     id: string;
     salida: string;
     llegada: string | null;
+    cupoTotal: number;
+    cupoOcupado: number;
+    ruta?: {
+      id: string;
+      nombre: string;
+      origen: string;
+      destino: string;
+    } | null;
     conductor?: {
       id: string;
       nombre: string;
@@ -163,6 +179,7 @@ export function AdminDashboard() {
   const [selectedDriverBySchedule, setSelectedDriverBySchedule] = useState<Record<string, string>>({});
   const [emailToCancel, setEmailToCancel] = useState("");
   const [reservationStatusFilter, setReservationStatusFilter] = useState<ReservationStatusFilter>("ACTIVA");
+  const [occupancyScheduleFilter, setOccupancyScheduleFilter] = useState<string>("all");
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAssigningScheduleId, setIsAssigningScheduleId] = useState<string | null>(null);
@@ -224,6 +241,9 @@ export function AdminDashboard() {
           id: horario.id,
           departureTime: formatTime(horario.salida),
           arrivalTime: formatTime(horario.llegada || horario.salida),
+          cupoTotal: horario.cupoTotal,
+          cupoOcupado: horario.cupoOcupado,
+          route: horario.ruta || null,
           driverId: horario.conductor?.id || null,
           driver: horario.conductor || null,
         }));
@@ -488,6 +508,25 @@ export function AdminDashboard() {
     };
   });
 
+  const occupancyRows = schedules
+    .filter((schedule) => occupancyScheduleFilter === "all" || schedule.id === occupancyScheduleFilter)
+    .map((schedule) => {
+      const occupiedSeats = Math.max(0, schedule.cupoOcupado);
+      const totalSeats = Math.max(0, schedule.cupoTotal);
+      const occupancyPct = totalSeats > 0 ? Math.round((occupiedSeats / totalSeats) * 100) : 0;
+
+      return {
+        scheduleId: schedule.id,
+        scheduleLabel: `${schedule.departureTime} - ${schedule.arrivalTime}`,
+        routeLabel: schedule.route
+          ? `${schedule.route.nombre} (${schedule.route.origen} -> ${schedule.route.destino})`
+          : "Ruta sin informacion",
+        occupiedSeats,
+        totalSeats,
+        occupancyPct,
+      };
+    });
+
   const allAvailableDrivers = useMemo(() => {
     const allDrivers = Object.values(availableDriversBySchedule).flat();
     const uniqueMap = new Map<string, DriverAvailability>();
@@ -707,6 +746,64 @@ export function AdminDashboard() {
                 </Select>
               </div>
             </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Demanda por ruta</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Número de estudiantes por ruta y ocupación total de cupos.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="max-w-xs">
+                  <Select value={occupancyScheduleFilter} onValueChange={setOccupancyScheduleFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filtrar por horario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los horarios</SelectItem>
+                      {schedules.map((schedule) => (
+                        <SelectItem key={schedule.id} value={schedule.id}>
+                          {schedule.departureTime} - {schedule.arrivalTime}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {occupancyRows.length === 0 ? (
+                  <p className="text-sm text-gray-500">No hay horarios para el filtro seleccionado.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {occupancyRows.map((row) => (
+                      <div
+                        key={row.scheduleId}
+                        className="rounded-lg border bg-gray-50/80 dark:bg-gray-900/60 p-3 space-y-2"
+                      >
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{row.routeLabel}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-300">Horario: {row.scheduleLabel}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-purple-900 dark:text-purple-200">
+                              {row.occupiedSeats}/{row.totalSeats}
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-300">{row.occupancyPct}% ocupación</p>
+                          </div>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-600"
+                            style={{ width: `${Math.min(100, row.occupancyPct)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader className="pb-3">
