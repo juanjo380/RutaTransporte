@@ -135,47 +135,6 @@ export function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo credentials toggle */}
-        <div className="text-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCredentials(!showCredentials)}
-            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
-          >
-            {showCredentials ? "Ocultar" : "Ver"} credenciales de prueba
-          </Button>
-        </div>
-
-        {/* Demo Credentials */}
-        {showCredentials && (
-          <Card className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base dark:text-gray-100">Credenciales de prueba</CardTitle>
-              <CardDescription className="text-xs dark:text-gray-300">
-                Usa estas credenciales para probar el sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 space-y-1">
-                <p className="font-semibold text-blue-900 dark:text-blue-300">Estudiante</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Email: estudiante@univ.edu</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Contraseña: estudiante123</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 space-y-1">
-                <p className="font-semibold text-purple-900 dark:text-purple-300">Administrador</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Email: admin@ruta.com</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Contraseña: admin123</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 space-y-1">
-                <p className="font-semibold text-green-900 dark:text-green-300">Conductor</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Email: carlos@conductor.com</p>
-                <p className="text-xs text-gray-600 dark:text-gray-300">Contraseña: conductor123</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Footer */}
         <p className="text-center text-xs text-gray-500 dark:text-gray-400">
           Prototipo v1.0 - Sistema de gestión de transporte universitario
