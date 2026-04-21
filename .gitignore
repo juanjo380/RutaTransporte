@@ -1,10 +1,18 @@
 # shared build artifacts
 node_modules/
+**/node_modules/
 .next/
+**/.next/
 out/
 build/
 dist/
+**/dist/
+**/build/
 coverage/
+**/coverage/
+.turbo/
+.cache/
+.eslintcache
 
 # environment
 .env
@@ -17,6 +25,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
 # misc
 .DS_Store
@@ -26,3 +35,7 @@ desktop.ini
 *.tsbuildinfo
 *.pem
 backend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
