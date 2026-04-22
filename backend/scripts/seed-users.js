@@ -1,35 +1,11 @@
 import bcrypt from "bcryptjs";
+import fs from "fs/promises";
+import path from "path";
 import { prisma } from "../src/lib/prisma.js";
 
 const SALT_ROUNDS = 10;
 const VALID_MODES = new Set(["create", "upsert", "sync"]);
-
-const users = [
-  {
-    nombre: "Juan Pérez",
-    email: "juan.perez@univ.edu",
-    password: "Student123!",
-    rol: "ESTUDIANTE",
-  },
-  {
-    nombre: "Carlos Rodríguez",
-    email: "carlos.driver@univ.edu",
-    password: "Driver123!",
-    rol: "CONDUCTOR",
-  },
-  {
-    nombre: "María González",
-    email: "maria.driver@univ.edu",
-    password: "Driver123!",
-    rol: "CONDUCTOR",
-  },
-  {
-    nombre: "Admin Sistema",
-    email: "admin@rutauniv.com",
-    password: "Admin123!",
-    rol: "ADMIN",
-  },
-];
+const DEFAULT_SEED_FILE = "scripts/seed-users.public.json";
 
 function getSeedMode() {
   const argMode = process.argv
@@ -49,11 +25,60 @@ function getSeedMode() {
   return mode;
 }
 
+function getSeedFilePath() {
+  const argFile = process.argv
+    .find((arg) => arg.startsWith("--file="))
+    ?.slice("--file=".length)
+    ?.trim();
+
+  const envFile = process.env.SEED_USERS_FILE?.trim();
+  const selected = argFile || envFile || DEFAULT_SEED_FILE;
+
+  if (path.isAbsolute(selected)) {
+    return selected;
+  }
+
+  return path.resolve(process.cwd(), selected);
+}
+
+async function loadSeedUsers(seedFilePath) {
+  const raw = await fs.readFile(seedFilePath, "utf8");
+  const parsed = JSON.parse(raw);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("El archivo de seed debe contener un arreglo JSON de usuarios.");
+  }
+
+  for (const [index, user] of parsed.entries()) {
+    const hasRequiredFields =
+      typeof user?.nombre === "string" &&
+      typeof user?.email === "string" &&
+      typeof user?.password === "string" &&
+      typeof user?.rol === "string";
+
+    if (!hasRequiredFields) {
+      throw new Error(
+        `Usuario invalido en indice ${index}. Campos requeridos: nombre, email, password, rol.`
+      );
+    }
+  }
+
+  return parsed;
+}
+
 async function main() {
   const mode = getSeedMode();
+  const seedFilePath = getSeedFilePath();
+  const users = await loadSeedUsers(seedFilePath);
+
+  if (users.length === 0) {
+    throw new Error("El archivo de seed no contiene usuarios.");
+  }
+
   const seedEmails = users.map((user) => user.email.toLowerCase());
 
-  console.log(`🌱 Iniciando seeding de usuarios (modo: ${mode})...\n`);
+  console.log(`🌱 Iniciando seeding de usuarios (modo: ${mode})...`);
+  console.log(`📄 Archivo de seed: ${seedFilePath}\n`);
 
   for (const user of users) {
     try {

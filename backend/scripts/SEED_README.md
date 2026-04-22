@@ -4,6 +4,8 @@
 
 Script Node.js que carga usuarios de manera manual en la BD con contraseñas **encriptadas automáticamente**.
 
+El script ahora lee usuarios desde archivo JSON para separar datos publicos (versionados) de datos privados (locales e ignorados por git).
+
 Ideal para:
 - Cargar datos iniciales en desarrollo
 - Cargar usuarios sin usar el endpoint de registro
@@ -18,6 +20,8 @@ Ideal para:
 | maria.driver@univ.edu | CONDUCTOR | Driver123! |
 | admin@rutauniv.com | ADMIN | Admin123! |
 
+Estos usuarios viven en `scripts/seed-users.public.json`.
+
 ## Uso
 
 ### Opción 1: Con npm (recomendado)
@@ -28,6 +32,26 @@ npm run seed
 ```
 
 Por defecto, `npm run seed` usa modo `upsert` (crea o actualiza).
+Tambien usa por defecto `scripts/seed-users.public.json`.
+
+Para usar un archivo privado local:
+
+```bash
+SEED_USERS_FILE=scripts/private/seed-users.private.json npm run seed
+```
+
+En PowerShell:
+
+```powershell
+$env:SEED_USERS_FILE="scripts/private/seed-users.private.json"
+npm run seed
+```
+
+Tambien puedes pasarlo por argumento:
+
+```bash
+npm run seed -- --file=scripts/private/seed-users.private.json
+```
 
 ### Modos disponibles
 
@@ -48,6 +72,7 @@ Tambien puedes usar argumento directo:
 node scripts/seed-users.js --mode=create
 node scripts/seed-users.js --mode=upsert
 node scripts/seed-users.js --mode=sync
+node scripts/seed-users.js --mode=upsert --file=scripts/private/seed-users.private.json
 ```
 
 ### Opción 2: Con node directo
@@ -86,8 +111,14 @@ En modo `upsert` o `sync` verás salida tipo:
 
 Para añadir o cambiar usuarios, edita `scripts/seed-users.js`:
 
+Para datos de ejemplo del repo, edita `scripts/seed-users.public.json`.
+
+Para datos reales o sensibles, crea un archivo local en `scripts/private/seed-users.private.json` (esta carpeta se ignora por git).
+
+Formato ejemplo:
+
 ```javascript
-const users = [
+[
   {
     nombre: "Tu Nombre",
     email: "tu.email@univ.edu",
@@ -95,7 +126,7 @@ const users = [
     rol: "ESTUDIANTE", // ESTUDIANTE, CONDUCTOR, ADMIN
   },
   // Más usuarios...
-];
+]
 ```
 
 Luego ejecuta según necesidad:
@@ -115,6 +146,7 @@ Regla importante:
 ✅ Compatible con login backend (autenticación funcional)  
 ✅ Idempotente: no duplica usuarios si ya existen  
 ✅ Modos flexibles para create, upsert y sync  
+✅ Soporta archivo privado local de seed para no versionar datos reales  
 
 ## Troubleshooting
 

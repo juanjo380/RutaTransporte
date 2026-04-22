@@ -1,0 +1,26 @@
+[
+  {
+    "nombre": "Juan Pérez",
+    "email": "juan.perez@univ.edu",
+    "password": "Student123!",
+    "rol": "ESTUDIANTE"
+  },
+  {
+    "nombre": "Carlos Rodríguez",
+    "email": "carlos.driver@univ.edu",
+    "password": "Driver123!",
+    "rol": "CONDUCTOR"
+  },
+  {
+    "nombre": "María González",
+    "email": "maria.driver@univ.edu",
+    "password": "Driver123!",
+    "rol": "CONDUCTOR"
+  },
+  {
+    "nombre": "Admin Sistema",
+    "email": "admin@rutauniv.com",
+    "password": "Admin123!",
+    "rol": "ADMIN"
+  }
+]
