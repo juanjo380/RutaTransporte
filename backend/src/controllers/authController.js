@@ -1,6 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import path from "path";
+import fs from "fs/promises";
 import { prisma } from "../lib/prisma.js";
+
+const AVATAR_EXTS = [".webp", ".png", ".jpg"];
+const AVATAR_DIR = path.join(process.cwd(), "uploads", "avatars");
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
@@ -47,10 +52,108 @@ function sanitizeUser(user) {
 		id: user.id,
 		name: user.nombre,
 		email: user.email,
+		phone: user.telefono || null,
+		location: user.ubicacion || null,
 		role: mapRoleToApi(user.rol),
 		createdAt: user.createdAt,
 		updatedAt: user.updatedAt,
 	};
+}
+
+async function removeOtherAvatarVariants(userId, keepExt) {
+	const removals = AVATAR_EXTS.filter((ext) => ext !== keepExt).map((ext) =>
+		fs.unlink(path.join(AVATAR_DIR, `${userId}${ext}`)).catch(() => null)
+	);
+	await Promise.all(removals);
+}
+
+export async function getAvatar(req, res) {
+	try {
+		const userId = String(req.params.userId || "");
+		if (!userId || userId.includes("/") || userId.includes("\\")) {
+			return res.status(400).json({ ok: false, message: "userId invalido" });
+		}
+
+		for (const ext of AVATAR_EXTS) {
+			const candidate = path.join(AVATAR_DIR, `${userId}${ext}`);
+			try {
+				await fs.access(candidate);
+				return res.sendFile(candidate);
+			} catch {
+				// try next ext
+			}
+		}
+
+		return res.status(404).json({ ok: false, message: "Avatar no encontrado" });
+	} catch (error) {
+		return res.status(500).json({ ok: false, message: "Error al obtener avatar", error: error.message });
+	}
+}
+
+export async function uploadAvatar(req, res) {
+	try {
+		const userId = req.user?.id;
+		if (!userId) {
+			return res.status(401).json({ ok: false, message: "No autenticado" });
+		}
+
+		const file = req.file;
+		if (!file) {
+			return res.status(400).json({ ok: false, message: "Archivo avatar es obligatorio" });
+		}
+
+		const ext = path.extname(file.filename);
+		await removeOtherAvatarVariants(userId, ext);
+
+		return res.status(200).json({
+			ok: true,
+			message: "Avatar actualizado",
+			data: {
+				url: `/api/auth/avatar/${userId}?v=${Date.now()}`,
+			},
+		});
+	} catch (error) {
+		return res.status(500).json({ ok: false, message: "Error al subir avatar", error: error.message });
+	}
+}
+
+export async function updateMe(req, res) {
+	try {
+		const userId = req.user?.id;
+		if (!userId) {
+			return res.status(401).json({ ok: false, message: "No autenticado" });
+		}
+
+		const { name, phone, location } = req.body || {};
+
+		const data = {};
+		if (typeof name === "string" && name.trim()) {
+			data.nombre = name.trim();
+		}
+		if (typeof phone === "string") {
+			data.telefono = phone.trim() ? phone.trim() : null;
+		}
+		if (typeof location === "string") {
+			data.ubicacion = location.trim() ? location.trim() : null;
+		}
+
+		if (Object.keys(data).length === 0) {
+			return res.status(400).json({ ok: false, message: "No hay cambios para actualizar" });
+		}
+
+		const updated = await prisma.usuario.update({
+			where: { id: userId },
+			data,
+		});
+
+		return res.status(200).json({
+			ok: true,
+			message: "Perfil actualizado",
+			user: sanitizeUser(updated),
+		});
+	} catch (error) {
+		return res.status(500).json({ ok: false, message: "Error al actualizar perfil", error: error.message });
+	}
 }
 
 export async function register(req, res) {

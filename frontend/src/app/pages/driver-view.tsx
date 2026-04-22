@@ -160,6 +160,10 @@ export function DriverView() {
                 <User className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
+              <Button variant="outline" size="sm" onClick={() => navigate("/profile")}>
+                <User className="size-4 mr-2" />
+                Perfil
+              </Button>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
               </Button>

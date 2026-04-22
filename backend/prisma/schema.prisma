@@ -11,6 +11,8 @@ model Usuario {
   nombre    String
   email     String    @unique
   password  String
+  telefono  String?
+  ubicacion String?
   rol       Rol       @default(ESTUDIANTE)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

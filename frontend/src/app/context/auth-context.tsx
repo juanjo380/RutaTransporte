@@ -6,6 +6,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string | null;
+  location?: string | null;
   role: UserRole;
   driverId?: string; // For drivers
 }
@@ -14,6 +16,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
+  setUser: (user: User | null) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -36,6 +39,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const setUserAndPersist = (nextUser: User | null) => {
+    if (!nextUser) {
+      localStorage.removeItem(USER_STORAGE_KEY);
+      setUser(null);
+      return;
+    }
+
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
+    setUser(nextUser);
+  };
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -64,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const data = (await response.json()) as AuthApiResponse;
         if (data.ok && data.user) {
-          setUser(data.user);
+          setUserAndPersist(data.user);
         }
       } catch {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -135,8 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
-      setUser(data.user);
+      setUserAndPersist(data.user);
 
       return { ok: true };
     } catch {
@@ -159,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         login,
         logout,
+        setUser: setUserAndPersist,
         isAuthenticated: !!user,
         isLoading,
       }}
