@@ -25,6 +25,403 @@ async function descontarCupoSeguro(tx, horarioId, cantidad = 1) {
 	return true;
 }
 
+const DIAS_SEMANA = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
+const HORARIOS_IDA_IDS = new Set(["1", "2", "3", "7", "8"]);
+const HORARIOS_VUELTA_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
+
+function getDiaSemanaActual() {
+	const day = new Date().getDay();
+	const map = {
+		1: "LUNES",
+		2: "MARTES",
+		3: "MIERCOLES",
+		4: "JUEVES",
+		5: "VIERNES",
+	};
+
+	return map[day] || null;
+}
+
+function normalizarDia(dia) {
+	if (!dia) {
+		return null;
+	}
+
+	const normalizado = String(dia)
+		.normalize("NFD")
+		.replace(/\p{Diacritic}/gu, "")
+		.toUpperCase();
+
+	return DIAS_SEMANA.includes(normalizado) ? normalizado : null;
+}
+
+function parseHoraAHorasMinutos(hora) {
+	if (typeof hora !== "string") {
+		return null;
+	}
+
+	const valor = hora.trim();
+	if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(valor)) {
+		return null;
+	}
+
+	const [horas, minutos] = valor.split(":").map(Number);
+	return horas * 60 + minutos;
+}
+
+function esHoraPuntual(hora) {
+	return /^([01]\d|2[0-3]):00$/.test(String(hora || "").trim());
+}
+
+function formatMinutosAHora(minutos) {
+	const h = Math.floor(minutos / 60)
+		.toString()
+		.padStart(2, "0");
+	const m = (minutos % 60).toString().padStart(2, "0");
+	return `${h}:${m}`;
+}
+
+function getHorarioMinutes(horario) {
+	const salida = new Date(horario.salida);
+	return salida.getHours() * 60 + salida.getMinutes();
+}
+
+function clasificarDireccionHorario(horario) {
+	if (HORARIOS_IDA_IDS.has(String(horario.id))) {
+		return "ida";
+	}
+
+	if (HORARIOS_VUELTA_IDS.has(String(horario.id))) {
+		return "vuelta";
+	}
+
+	return null;
+}
+
+function seleccionarHorarioIda(horariosIda, entradaMinutos) {
+	if (horariosIda.length === 0) {
+		return null;
+	}
+
+	const candidatos = horariosIda.filter((horario) => horario.minutos <= entradaMinutos);
+	if (candidatos.length > 0) {
+		return candidatos.sort((a, b) => b.minutos - a.minutos)[0];
+	}
+
+	return [...horariosIda].sort((a, b) => a.minutos - b.minutos)[0];
+}
+
+function seleccionarHorarioVuelta(horariosVuelta, salidaMinutos) {
+	if (horariosVuelta.length === 0) {
+		return null;
+	}
+
+	const candidatos = horariosVuelta.filter((horario) => horario.minutos >= salidaMinutos);
+	if (candidatos.length > 0) {
+		return candidatos.sort((a, b) => a.minutos - b.minutos)[0];
+	}
+
+	return [...horariosVuelta].sort((a, b) => b.minutos - a.minutos)[0];
+}
+
+function construirAsignaciones(horariosSemanales, horariosActivos) {
+	const horariosClasificados = horariosActivos
+		.map((horario) => {
+			const direccion = clasificarDireccionHorario(horario);
+			return {
+				id: horario.id,
+				direccion,
+				minutos: getHorarioMinutes(horario),
+			};
+		})
+		.filter((horario) => Boolean(horario.direccion));
+
+	const ida = horariosClasificados.filter((horario) => horario.direccion === "ida");
+	const vuelta = horariosClasificados.filter((horario) => horario.direccion === "vuelta");
+
+	const desiredAsignaciones = [];
+	const dias = horariosSemanales.map((item) => {
+		if (!item.viaja) {
+			return {
+				dia: item.dia,
+				viaja: false,
+				primeraEntrada: null,
+				ultimaSalida: null,
+				reservaIdaHorarioId: null,
+				reservaIdaHora: null,
+				reservaVueltaHorarioId: null,
+				reservaVueltaHora: null,
+			};
+		}
+
+		const entradaMinutos = parseHoraAHorasMinutos(item.primeraEntrada);
+		const salidaMinutos = parseHoraAHorasMinutos(item.ultimaSalida);
+
+		const idaSeleccionada = seleccionarHorarioIda(ida, entradaMinutos);
+		const vueltaSeleccionada = seleccionarHorarioVuelta(vuelta, salidaMinutos);
+
+		if (idaSeleccionada?.id) {
+			desiredAsignaciones.push({
+				dia: item.dia,
+				direccion: "ida",
+				horarioId: idaSeleccionada.id,
+			});
+		}
+
+		if (vueltaSeleccionada?.id) {
+			desiredAsignaciones.push({
+				dia: item.dia,
+				direccion: "vuelta",
+				horarioId: vueltaSeleccionada.id,
+			});
+		}
+
+		return {
+			dia: item.dia,
+			viaja: true,
+			primeraEntrada: item.primeraEntrada,
+			ultimaSalida: item.ultimaSalida,
+			reservaIdaHorarioId: idaSeleccionada?.id || null,
+			reservaIdaHora: idaSeleccionada
+				? formatMinutosAHora(idaSeleccionada.minutos)
+				: null,
+			reservaVueltaHorarioId: vueltaSeleccionada?.id || null,
+			reservaVueltaHora: vueltaSeleccionada
+				? formatMinutosAHora(vueltaSeleccionada.minutos)
+				: null,
+		};
+	});
+
+	return {
+		dias,
+		desiredAsignaciones,
+	};
+}
+
+async function activarReservaSiDisponible(tx, usuarioId, horarioId, diaSemana) {
+	const horario = await tx.horario.findUnique({
+		where: { id: horarioId },
+		select: { id: true, activo: true, cupoTotal: true },
+	});
+
+	if (!horario || !horario.activo) {
+		return { ok: false, motivo: "HORARIO_INACTIVO" };
+	}
+
+	const reservaExistente = await tx.reserva.findFirst({
+		where: {
+			usuarioId,
+			horarioId,
+			diaSemana,
+			esSemanal: true,
+		},
+		select: {
+			id: true,
+			estado: true,
+		},
+	});
+
+	if (reservaExistente?.estado === "ACTIVA") {
+		return { ok: true };
+	}
+
+	const reservasActivas = await tx.reserva.count({
+		where: {
+			horarioId,
+			estado: "ACTIVA",
+		},
+	});
+
+	if (reservasActivas >= horario.cupoTotal) {
+		return { ok: false, motivo: "CAPACIDAD_COMPLETA" };
+	}
+
+	const updateCupo = await tx.horario.updateMany({
+		where: {
+			id: horarioId,
+			cupoOcupado: { lt: horario.cupoTotal },
+		},
+		data: {
+			cupoOcupado: { increment: 1 },
+		},
+	});
+
+	if (updateCupo.count === 0) {
+		return { ok: false, motivo: "CAPACIDAD_COMPLETA" };
+	}
+
+	if (reservaExistente) {
+		await tx.reserva.update({
+			where: { id: reservaExistente.id },
+			data: { estado: "ACTIVA", esSemanal: true, diaSemana },
+		});
+		return { ok: true };
+	}
+
+	await tx.reserva.create({
+		data: {
+			usuarioId,
+			horarioId,
+			diaSemana,
+			esSemanal: true,
+			codigo: generarCodigoReserva(),
+			estado: "ACTIVA",
+		},
+	});
+
+	return { ok: true };
+}
+
+function keyAsignacion(diaSemana, horarioId) {
+	return `${diaSemana}|${horarioId}`;
+}
+
+async function sincronizarReservasHorarioSemanal(tx, usuarioId, desiredAsignaciones) {
+	const desiredSet = new Set(
+		desiredAsignaciones.map((item) => keyAsignacion(item.dia, item.horarioId))
+	);
+
+	const activas = await tx.reserva.findMany({
+		where: {
+			usuarioId,
+			estado: "ACTIVA",
+			esSemanal: true,
+		},
+		select: {
+			id: true,
+			horarioId: true,
+			diaSemana: true,
+		},
+	});
+
+	const cancelaciones = activas.filter(
+		(reserva) =>
+			!reserva.diaSemana ||
+			!desiredSet.has(keyAsignacion(reserva.diaSemana, reserva.horarioId))
+	);
+	if (cancelaciones.length > 0) {
+		await tx.reserva.updateMany({
+			where: { id: { in: cancelaciones.map((item) => item.id) } },
+			data: { estado: "CANCELADA" },
+		});
+
+		const porHorario = new Map();
+		for (const item of cancelaciones) {
+			const current = porHorario.get(item.horarioId) || 0;
+			porHorario.set(item.horarioId, current + 1);
+		}
+
+		for (const [horarioId, cantidad] of porHorario.entries()) {
+			await descontarCupoSeguro(tx, horarioId, cantidad);
+		}
+	}
+
+	const noAsignadas = [];
+	for (const asignacion of desiredAsignaciones) {
+		const result = await activarReservaSiDisponible(
+			tx,
+			usuarioId,
+			asignacion.horarioId,
+			asignacion.dia
+		);
+		if (!result.ok) {
+			noAsignadas.push({
+				dia: asignacion.dia,
+				direccion: asignacion.direccion,
+				horarioId: asignacion.horarioId,
+				motivo: result.motivo,
+			});
+		}
+	}
+
+	return { noAsignadas };
+}
+
+function validarHorarioSemanalPayload(horarios) {
+	if (!Array.isArray(horarios)) {
+		return { ok: false, message: "horarios debe ser un arreglo" };
+	}
+
+	if (horarios.length !== DIAS_SEMANA.length) {
+		return {
+			ok: false,
+			message: "Debes registrar los 5 dias habiles (lunes a viernes)",
+		};
+	}
+
+	const diasVistos = new Set();
+	const normalizados = [];
+
+	for (const item of horarios) {
+		const dia = normalizarDia(item?.dia);
+		const viaja = item?.viaja !== false;
+		const primeraEntrada = item?.primeraEntrada;
+		const ultimaSalida = item?.ultimaSalida;
+
+		if (!dia) {
+			return { ok: false, message: "Dia invalido. Usa lunes a viernes" };
+		}
+
+		if (diasVistos.has(dia)) {
+			return { ok: false, message: `No repitas el dia ${dia}` };
+		}
+
+		diasVistos.add(dia);
+
+		if (!viaja) {
+			normalizados.push({
+				dia,
+				viaja: false,
+				primeraEntrada: null,
+				ultimaSalida: null,
+			});
+			continue;
+		}
+
+		if (!esHoraPuntual(primeraEntrada) || !esHoraPuntual(ultimaSalida)) {
+			return {
+				ok: false,
+				message: `Para ${dia}, usa horarios puntuales en horas exactas (ej: 08:00)`,
+			};
+		}
+
+		const entradaMin = parseHoraAHorasMinutos(primeraEntrada);
+		const salidaMin = parseHoraAHorasMinutos(ultimaSalida);
+
+		if (entradaMin === null || salidaMin === null) {
+			return {
+				ok: false,
+				message: `Formato de hora invalido para ${dia}. Usa HH:MM en 24 horas`,
+			};
+		}
+
+		if (salidaMin <= entradaMin) {
+			return {
+				ok: false,
+				message: `Para ${dia}, ultimaSalida debe ser mayor a primeraEntrada`,
+			};
+		}
+
+		normalizados.push({
+			dia,
+			viaja: true,
+			primeraEntrada: String(primeraEntrada).trim(),
+			ultimaSalida: String(ultimaSalida).trim(),
+		});
+	}
+
+	for (const dia of DIAS_SEMANA) {
+		if (!diasVistos.has(dia)) {
+			return {
+				ok: false,
+				message: "Debes incluir todos los dias de lunes a viernes",
+			};
+		}
+	}
+
+	return { ok: true, data: normalizados };
+}
+
 export async function crearReserva(req, res) {
 	try {
 		const usuarioId = req.user?.id;
@@ -87,12 +484,12 @@ export async function crearReserva(req, res) {
 					};
 				}
 
-				const reservaExistente = await tx.reserva.findUnique({
+				const reservaExistente = await tx.reserva.findFirst({
 					where: {
-						usuarioId_horarioId: {
-							usuarioId,
-							horarioId,
-						},
+						usuarioId,
+						horarioId,
+						diaSemana: null,
+						esSemanal: false,
 					},
 					select: {
 						id: true,
@@ -119,12 +516,16 @@ export async function crearReserva(req, res) {
 							where: { id: reservaExistente.id },
 							data: {
 								estado: "ACTIVA",
+								diaSemana: null,
+								esSemanal: false,
 							},
 						})
 					: await tx.reserva.create({
 							data: {
 								usuarioId,
 								horarioId,
+								diaSemana: null,
+								esSemanal: false,
 								codigo: generarCodigoReserva(),
 								estado: "ACTIVA",
 							},
@@ -459,6 +860,8 @@ export async function listarMisReservas(req, res) {
 				id: true,
 				codigo: true,
 				estado: true,
+				diaSemana: true,
+				esSemanal: true,
 				createdAt: true,
 				horario: {
 					select: {
@@ -478,6 +881,147 @@ export async function listarMisReservas(req, res) {
 		return res.status(500).json({
 			ok: false,
 			message: "Error al listar reservas del usuario",
+			error: error.message,
+		});
+	}
+}
+
+export async function listarHorarioSemanalEstudiante(req, res) {
+	try {
+		const usuarioId = req.user?.id;
+
+		if (!usuarioId) {
+			return res.status(401).json({
+				ok: false,
+				message: "Usuario no autenticado",
+			});
+		}
+
+		const horarios = await prisma.horarioSemanalEstudiante.findMany({
+			where: { usuarioId },
+			orderBy: { dia: "asc" },
+			select: {
+				dia: true,
+				viaja: true,
+				primeraEntrada: true,
+				ultimaSalida: true,
+			},
+		});
+
+		const horariosActivos = await prisma.horario.findMany({
+			where: { activo: true },
+			select: { id: true, salida: true },
+		});
+
+		const asignaciones = construirAsignaciones(horarios, horariosActivos);
+
+		return res.status(200).json({
+			ok: true,
+			data: asignaciones.dias,
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al listar horario semanal del estudiante",
+			error: error.message,
+		});
+	}
+}
+
+export async function guardarHorarioSemanalEstudiante(req, res) {
+	try {
+		const usuarioId = req.user?.id;
+		const { horarios } = req.body || {};
+
+		if (!usuarioId) {
+			return res.status(401).json({
+				ok: false,
+				message: "Usuario no autenticado",
+			});
+		}
+
+		const validacion = validarHorarioSemanalPayload(horarios);
+		if (!validacion.ok) {
+			return res.status(400).json({
+				ok: false,
+				message: validacion.message,
+			});
+		}
+
+		const horariosNormalizados = validacion.data;
+
+		const horariosActivos = await prisma.horario.findMany({
+			where: { activo: true },
+			select: { id: true, salida: true },
+		});
+
+		const asignaciones = construirAsignaciones(horariosNormalizados, horariosActivos);
+		const diaActual = getDiaSemanaActual();
+		const asignacionesHoy = diaActual
+			? asignaciones.desiredAsignaciones.filter((item) => item.dia === diaActual)
+			: [];
+
+		if (
+			horariosNormalizados.some(
+				(item) => item.viaja && (!asignaciones.dias.find((dia) => dia.dia === item.dia)?.reservaIdaHorarioId || !asignaciones.dias.find((dia) => dia.dia === item.dia)?.reservaVueltaHorarioId)
+			)
+		) {
+			return res.status(409).json({
+				ok: false,
+				message:
+					"No se pudieron encontrar rutas de ida y vuelta para todos los dias marcados para viajar",
+			});
+		}
+
+		const syncResult = await prisma.$transaction(async (tx) => {
+			await tx.horarioSemanalEstudiante.deleteMany({
+				where: { usuarioId },
+			});
+
+			await tx.horarioSemanalEstudiante.createMany({
+				data: horariosNormalizados.map((item) => ({
+					usuarioId,
+					dia: item.dia,
+					viaja: item.viaja,
+					primeraEntrada: item.primeraEntrada,
+					ultimaSalida: item.ultimaSalida,
+				})),
+			});
+
+			return sincronizarReservasHorarioSemanal(
+				tx,
+				usuarioId,
+				asignacionesHoy
+			);
+		});
+
+		const horariosGuardados = await prisma.horarioSemanalEstudiante.findMany({
+			where: { usuarioId },
+			orderBy: { dia: "asc" },
+			select: {
+				dia: true,
+				viaja: true,
+				primeraEntrada: true,
+				ultimaSalida: true,
+			},
+		});
+
+		const asignacionesGuardadas = construirAsignaciones(horariosGuardados, horariosActivos);
+
+		return res.status(200).json({
+			ok: true,
+			message: "Horario semanal guardado correctamente",
+			data: asignacionesGuardadas.dias,
+			meta: {
+				diaAplicado: diaActual,
+				reservasEsperadasHoy: asignacionesHoy.length,
+				reservasNoAsignadas: syncResult.noAsignadas,
+			},
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al guardar horario semanal del estudiante",
 			error: error.message,
 		});
 	}
