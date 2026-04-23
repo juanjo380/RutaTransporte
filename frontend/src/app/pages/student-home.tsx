@@ -10,6 +10,7 @@ import { useTheme } from "../context/theme-context";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { MyReservations } from "../components/my-reservations";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
@@ -84,6 +85,19 @@ type MisReservasResponse = {
 
 type ReservationDetailsMap = Record<string, ReservationData>;
 
+type HorarioOcupantesResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    horarioId: string;
+    ocupantes: Array<{
+      id: string;
+      name: string;
+    }>;
+  };
+  error?: string;
+};
+
 function getReservationDetailsMap(): ReservationDetailsMap {
   try {
     const raw = localStorage.getItem(RESERVATION_DETAILS_STORAGE_KEY);
@@ -137,6 +151,10 @@ export function StudentHome() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+  const handleOpenDriverProfile = (driverId: string) => {
+    navigate(`/users/${driverId}`);
+  };
 
   const [schedules, setSchedules] = useState<Schedule[]>([
     {
@@ -365,6 +383,12 @@ export function StudentHome() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
+  const [isOccupantsOpen, setIsOccupantsOpen] = useState(false);
+  const [isOccupantsLoading, setIsOccupantsLoading] = useState(false);
+  const [occupantsError, setOccupantsError] = useState<string | null>(null);
+  const [occupantsSchedule, setOccupantsSchedule] = useState<Schedule | null>(null);
+  const [occupants, setOccupants] = useState<Array<{ id: string; name: string }>>([]);
+
   const refreshMyReservations = async (schedulesSource?: Schedule[]) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
@@ -485,6 +509,50 @@ export function StudentHome() {
     if (schedule) {
       setSelectedSchedule(schedule);
       setDialogOpen(true);
+    }
+  };
+
+  const handleViewOccupants = async (scheduleId: string) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      toast.error("Sesion expirada", {
+        description: "Inicia sesion nuevamente.",
+      });
+      navigate("/login");
+      return;
+    }
+
+    const schedule = schedules.find((s) => s.id === scheduleId) || null;
+    setOccupantsSchedule(schedule);
+    setIsOccupantsOpen(true);
+    setIsOccupantsLoading(true);
+    setOccupantsError(null);
+    setOccupants([]);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios/${scheduleId}/ocupantes`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = (await response.json()) as HorarioOcupantesResponse;
+
+      if (!response.ok || !json.ok || !json.data) {
+        setOccupantsError(
+          json.message ||
+            (response.status === 403
+              ? "No tienes permisos para ver los ocupantes de este horario."
+              : "No fue posible cargar los ocupantes.")
+        );
+        return;
+      }
+
+      setOccupants(json.data.ocupantes || []);
+    } catch {
+      setOccupantsError("No fue posible conectar con el servidor.");
+    } finally {
+      setIsOccupantsLoading(false);
     }
   };
 
@@ -617,15 +685,20 @@ export function StudentHome() {
               <h1 className="text-4xl text-blue-900 dark:text-blue-100">Ruta Universitaria</h1>
             </div>
             <div className="flex-1 flex justify-end gap-2">
-              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate("/profile")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    navigate("/profile");
+                  }
+                }}
+              >
                 <User className="size-4 text-gray-600 dark:text-gray-300" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate("/profile")}
-              >
-                <User className="size-4 mr-2" />
-                Perfil
-              </Button>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? (
                   <Moon className="size-4" />
@@ -677,6 +750,8 @@ export function StudentHome() {
                   key={schedule.id}
                   {...schedule}
                   onReserve={handleReserve}
+                  onDriverClick={handleOpenDriverProfile}
+                  onViewOccupants={handleViewOccupants}
                 />
               ))}
             </div>
@@ -690,6 +765,8 @@ export function StudentHome() {
                   key={schedule.id}
                   {...schedule}
                   onReserve={handleReserve}
+                  onDriverClick={handleOpenDriverProfile}
+                  onViewOccupants={handleViewOccupants}
                 />
               ))}
             </div>
@@ -707,6 +784,7 @@ export function StudentHome() {
             <MyReservations
               reservations={reservations}
               onCancel={handleCancelReservation}
+              onDriverClick={handleOpenDriverProfile}
             />
           </TabsContent>
         </Tabs>
@@ -729,6 +807,58 @@ export function StudentHome() {
         }
         onConfirm={handleConfirmReservation}
       />
+
+      <Dialog open={isOccupantsOpen} onOpenChange={setIsOccupantsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ocupantes del horario</DialogTitle>
+          </DialogHeader>
+
+          {occupantsSchedule ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {occupantsSchedule.direction === "ida" ? "Ida" : "Vuelta"} • {occupantsSchedule.origin} → {occupantsSchedule.destination}
+            </p>
+          ) : null}
+
+          {isOccupantsLoading ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300">Cargando ocupantes...</p>
+          ) : occupantsError ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300">{occupantsError}</p>
+          ) : occupants.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300">Aún no hay ocupantes asignados.</p>
+          ) : (
+            <div className="space-y-2">
+              {occupants.map((occupant) => (
+                <div
+                  key={occupant.id}
+                  className="flex items-center justify-between rounded-md border border-input bg-white/60 dark:bg-gray-900/40 px-3 py-2"
+                >
+                  <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                    {occupant.name}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsOccupantsOpen(false);
+                      navigate(`/users/${occupant.id}`);
+                    }}
+                  >
+                    Ver perfil
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={() => setIsOccupantsOpen(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

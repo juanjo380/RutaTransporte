@@ -1,11 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import path from "path";
-import fs from "fs/promises";
 import { prisma } from "../lib/prisma.js";
-
-const AVATAR_EXTS = [".webp", ".png", ".jpg"];
-const AVATAR_DIR = path.join(process.cwd(), "uploads", "avatars");
+import { getSupabaseAdmin, getSupabaseBucketName } from "../lib/supabaseAdmin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
@@ -54,67 +50,11 @@ function sanitizeUser(user) {
 		email: user.email,
 		phone: user.telefono || null,
 		location: user.ubicacion || null,
+		avatarUrl: user.avatarUrl || null,
 		role: mapRoleToApi(user.rol),
 		createdAt: user.createdAt,
 		updatedAt: user.updatedAt,
 	};
-}
-
-async function removeOtherAvatarVariants(userId, keepExt) {
-	const removals = AVATAR_EXTS.filter((ext) => ext !== keepExt).map((ext) =>
-		fs.unlink(path.join(AVATAR_DIR, `${userId}${ext}`)).catch(() => null)
-	);
-	await Promise.all(removals);
-}
-
-export async function getAvatar(req, res) {
-	try {
-		const userId = String(req.params.userId || "");
-		if (!userId || userId.includes("/") || userId.includes("\\")) {
-			return res.status(400).json({ ok: false, message: "userId invalido" });
-		}
-
-		for (const ext of AVATAR_EXTS) {
-			const candidate = path.join(AVATAR_DIR, `${userId}${ext}`);
-			try {
-				await fs.access(candidate);
-				return res.sendFile(candidate);
-			} catch {
-				// try next ext
-			}
-		}
-
-		return res.status(404).json({ ok: false, message: "Avatar no encontrado" });
-	} catch (error) {
-		return res.status(500).json({ ok: false, message: "Error al obtener avatar", error: error.message });
-	}
-}
-
-export async function uploadAvatar(req, res) {
-	try {
-		const userId = req.user?.id;
-		if (!userId) {
-			return res.status(401).json({ ok: false, message: "No autenticado" });
-		}
-
-		const file = req.file;
-		if (!file) {
-			return res.status(400).json({ ok: false, message: "Archivo avatar es obligatorio" });
-		}
-
-		const ext = path.extname(file.filename);
-		await removeOtherAvatarVariants(userId, ext);
-
-		return res.status(200).json({
-			ok: true,
-			message: "Avatar actualizado",
-			data: {
-				url: `/api/auth/avatar/${userId}?v=${Date.now()}`,
-			},
-		});
-	} catch (error) {
-		return res.status(500).json({ ok: false, message: "Error al subir avatar", error: error.message });
-	}
 }
 
 export async function updateMe(req, res) {
@@ -127,8 +67,10 @@ export async function updateMe(req, res) {
 		const { name, phone, location } = req.body || {};
 
 		const data = {};
+		const nameOnlyData = {};
 		if (typeof name === "string" && name.trim()) {
 			data.nombre = name.trim();
+			nameOnlyData.nombre = name.trim();
 		}
 		if (typeof phone === "string") {
 			data.telefono = phone.trim() ? phone.trim() : null;
@@ -141,10 +83,31 @@ export async function updateMe(req, res) {
 			return res.status(400).json({ ok: false, message: "No hay cambios para actualizar" });
 		}
 
-		const updated = await prisma.usuario.update({
-			where: { id: userId },
-			data,
-		});
+		let updated;
+		try {
+			updated = await prisma.usuario.update({
+				where: { id: userId },
+				data,
+			});
+		} catch (error) {
+			const msg = String(error?.message || "");
+			const isUnknownTelefono = msg.includes("Unknown field") && msg.includes("telefono");
+			const isUnknownUbicacion = msg.includes("Unknown field") && msg.includes("ubicacion");
+			if ((isUnknownTelefono || isUnknownUbicacion) && Object.keys(nameOnlyData).length > 0) {
+				updated = await prisma.usuario.update({
+					where: { id: userId },
+					data: nameOnlyData,
+				});
+
+				return res.status(200).json({
+					ok: true,
+					message: "Perfil actualizado (parcial). Reinicia el backend para aplicar telefono/ubicacion.",
+					user: sanitizeUser(updated),
+				});
+			}
+
+			throw error;
+		}
 
 		return res.status(200).json({
 			ok: true,
@@ -153,6 +116,64 @@ export async function updateMe(req, res) {
 		});
 	} catch (error) {
 		return res.status(500).json({ ok: false, message: "Error al actualizar perfil", error: error.message });
+	}
+}
+
+export async function updateMyAvatar(req, res) {
+	try {
+		const userId = req.user?.id;
+		if (!userId) {
+			return res.status(401).json({ ok: false, message: "No autenticado" });
+		}
+
+		const file = req.file;
+		if (!file) {
+			return res.status(400).json({ ok: false, message: "avatar es obligatorio" });
+		}
+
+		if (file.mimetype !== "image/jpeg") {
+			return res.status(400).json({ ok: false, message: "Formato no permitido. Sube una imagen JPG." });
+		}
+
+		const supabase = getSupabaseAdmin();
+		const bucket = getSupabaseBucketName();
+		const path = `avatars/${userId}.jpg`;
+
+		const uploadResult = await supabase.storage
+			.from(bucket)
+			.upload(path, file.buffer, {
+				upsert: true,
+				contentType: file.mimetype,
+				cacheControl: "3600",
+			});
+
+		if (uploadResult.error) {
+			return res.status(500).json({
+				ok: false,
+				message: "Error al subir avatar",
+				error: uploadResult.error.message,
+			});
+		}
+
+		const publicUrl = supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+		const avatarUrl = `${publicUrl}?v=${Date.now()}`;
+
+		const updated = await prisma.usuario.update({
+			where: { id: userId },
+			data: { avatarUrl },
+		});
+
+		return res.status(200).json({
+			ok: true,
+			message: "Avatar actualizado",
+			user: sanitizeUser(updated),
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al actualizar avatar",
+			error: error.message,
+		});
 	}
 }
 

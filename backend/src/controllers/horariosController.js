@@ -401,3 +401,82 @@ export async function listarHorariosConductor(req, res) {
 		});
 	}
 }
+
+export async function listarOcupantesHorario(req, res) {
+	try {
+		const horarioId = String(req.params?.horarioId || "");
+		const userId = req.user?.id;
+		const role = req.user?.role;
+
+		if (!userId) {
+			return res.status(401).json({ ok: false, message: "Usuario no autenticado" });
+		}
+
+		if (!horarioId) {
+			return res.status(400).json({ ok: false, message: "horarioId es obligatorio" });
+		}
+
+		const horario = await prisma.horario.findUnique({
+			where: { id: horarioId },
+			select: {
+				id: true,
+				conductorId: true,
+				reservas: {
+					where: { estado: "ACTIVA" },
+					orderBy: { createdAt: "asc" },
+					select: {
+						usuarioId: true,
+						usuario: {
+							select: {
+								id: true,
+								nombre: true,
+							},
+						},
+					},
+				},
+			},
+		});
+
+		if (!horario) {
+			return res.status(404).json({ ok: false, message: "Horario no encontrado" });
+		}
+
+		const isAdmin = role === "ADMIN";
+		const isDriver = role === "CONDUCTOR";
+		const isStudent = role === "ESTUDIANTE";
+
+		if (isAdmin) {
+			// ok
+		} else if (isDriver) {
+			if (horario.conductorId !== userId) {
+				return res.status(403).json({ ok: false, message: "No tienes permisos para ver los ocupantes de este horario" });
+			}
+		} else if (isStudent) {
+			// Permitido para estudiantes autenticados.
+		} else {
+			return res.status(403).json({ ok: false, message: "No tienes permisos para ver los ocupantes de este horario" });
+		}
+
+		const ocupantes = horario.reservas
+			.map((reserva) => reserva.usuario)
+			.filter(Boolean)
+			.map((usuario) => ({
+				id: usuario.id,
+				name: usuario.nombre,
+			}));
+
+		return res.status(200).json({
+			ok: true,
+			data: {
+				horarioId: horario.id,
+				ocupantes,
+			},
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al listar ocupantes del horario",
+			error: error.message,
+		});
+	}
+}

@@ -15,6 +15,8 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
@@ -35,19 +37,45 @@ type UpdateMeResponse = {
     name: string;
     phone?: string | null;
     location?: string | null;
+    avatarUrl?: string | null;
     role: "student" | "admin" | "driver";
   };
   error?: string;
 };
 
-type UploadAvatarResponse = {
+type UpdateAvatarResponse = {
   ok: boolean;
   message?: string;
-  data?: {
-    url: string;
-  };
+  user?: UpdateMeResponse["user"];
   error?: string;
 };
+
+const PROFILE_LOCATION_OPTIONS = [
+  "Montellano - Ara",
+  "Estambul - Dollarcity",
+  "Julia - Rapitienda del parque",
+  "Julia - Pizza nostra",
+  "Portales del rio - Bahia Terminal",
+  "Aures - Semaforo Caribe",
+  "Paloblanco - Estación Terpel",
+  "Paloblanco - D1",
+  "Paloblanco - Panaderia",
+  "Carmelo - CR1/CL4",
+  "Carmelo - CR1/CL5",
+  "Carmelo - CR2/CL5",
+  "La Merced - Cañaveral Terminal",
+  "La Merced - CR19/CL3",
+  "La ventura - Alibaba",
+  "Buga - Universidad sede",
+  "Tulua - UCEVA",
+].filter((item) => item.trim().length > 0);
+
+function getGeneratedAvatarUrl(seed: string) {
+  const base = "https://api.dicebear.com/7.x/initials/svg";
+  const url = new URL(base);
+  url.searchParams.set("seed", seed);
+  return url.toString();
+}
 
 function loadLocalProfile(userId: string): LocalProfile {
   try {
@@ -80,11 +108,11 @@ export function ProfilePage() {
   const [sex, setSex] = useState<LocalProfile["sex"]>("NO_ESPECIFICA");
   const [description, setDescription] = useState("");
 
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarVersion, setAvatarVersion] = useState<number>(() => Date.now());
+  const [isAvatarOpen, setIsAvatarOpen] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -106,8 +134,94 @@ export function ProfilePage() {
       return "";
     }
 
-    return `${API_BASE_URL}/api/auth/avatar/${user.id}?v=${avatarVersion}`;
-  }, [user, avatarVersion]);
+    if (avatarPreviewUrl) {
+      return avatarPreviewUrl;
+    }
+
+    if (user.avatarUrl) {
+      return user.avatarUrl;
+    }
+
+    return getGeneratedAvatarUrl(user.id);
+  }, [user, avatarPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
+
+  const loadImageFromBlob = (blob: Blob) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("No se pudo leer la imagen"));
+      };
+      img.src = url;
+    });
+
+  const prepareAvatarJpeg = async (file: File) => {
+    const lowerType = (file.type || "").toLowerCase();
+
+    let sourceBlob: Blob = file;
+
+    if (lowerType === "image/heic" || lowerType === "image/heif") {
+      const mod = await import("heic2any");
+      const heic2any = mod.default as unknown as (options: {
+        blob: Blob;
+        toType: string;
+        quality?: number;
+      }) => Promise<Blob | Blob[]>;
+      const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+      sourceBlob = Array.isArray(converted) ? converted[0] : converted;
+    }
+
+    if (sourceBlob.type === "image/jpeg") {
+      return new File([sourceBlob], "avatar.jpg", { type: "image/jpeg" });
+    }
+
+    const img = await loadImageFromBlob(sourceBlob);
+
+    const max = 512;
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const targetW = Math.max(1, Math.round(img.width * scale));
+    const targetH = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("No se pudo preparar la imagen");
+    }
+
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    const jpegBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("No se pudo convertir la imagen"));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.85
+      );
+    });
+
+    return new File([jpegBlob], "avatar.jpg", { type: "image/jpeg" });
+  };
 
   const initials = useMemo(() => {
     const value = (name || user?.name || "").trim();
@@ -122,64 +236,36 @@ export function ProfilePage() {
     return (first + second).toUpperCase() || "U";
   }, [name, user?.name]);
 
+  const displayName = useMemo(() => {
+    const base = (name || user?.name || "").trim();
+    const ln = (lastName || "").trim();
+    const result = ln ? `${base} ${ln}`.trim() : base;
+    return result || user?.name || "";
+  }, [lastName, name, user?.name]);
+
+  const locationSelectValue = location.trim() ? location : "__none__";
+
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const handleUploadAvatar = async () => {
-    if (!user) {
-      return;
+  const handlePickAvatar = (file: File | null) => {
+    if (avatarPreviewUrl) {
+      URL.revokeObjectURL(avatarPreviewUrl);
     }
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    if (!avatarFile) {
-      toast.error("Selecciona una imagen", {
-        description: "Elige un archivo PNG/JPG/WEBP de máximo 3MB.",
-      });
-      return;
-    }
-
-    setIsUploadingAvatar(true);
-    try {
-      const form = new FormData();
-      form.append("avatar", avatarFile);
-
-      const response = await fetch(`${API_BASE_URL}/api/auth/avatar`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: form,
-      });
-
-      const json = (await response.json()) as UploadAvatarResponse;
-
-      if (!response.ok || !json.ok) {
-        toast.error("No se pudo subir la foto", {
-          description: json.message || "Intenta nuevamente.",
-        });
-        return;
-      }
-
+    if (!file) {
+      setAvatarPreviewUrl(null);
       setAvatarFile(null);
-      setAvatarVersion(Date.now());
-
-      toast.success("Foto actualizada", {
-        description: "Tu foto de perfil se guardó correctamente.",
-      });
-    } catch {
-      toast.error("Error de conexión", {
-        description: "No fue posible subir la foto.",
-      });
-    } finally {
-      setIsUploadingAvatar(false);
+      return;
     }
+
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+    setAvatarFile(file);
+    toast.message("Foto seleccionada", {
+      description: "Se subirá al guardar cambios (y se verá en otros perfiles).",
+    });
   };
 
   const handleSave = async () => {
@@ -193,36 +279,88 @@ export function ProfilePage() {
       return;
     }
 
+    const remotePayload = { name, phone, location };
+
+    const hasRemoteChanges =
+      (remotePayload.name || "").trim() !== (user.name || "").trim() ||
+      (remotePayload.phone || "").trim() !== String(user.phone || "").trim() ||
+      (remotePayload.location || "").trim() !== String(user.location || "").trim();
+
     setIsSaving(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name,
-          phone,
-          location,
-        }),
-      });
+      let remoteSaved = false;
+      let avatarSaved = false;
 
-      const json = (await response.json()) as UpdateMeResponse;
+      let nextUser = user;
 
-      if (!response.ok || !json.ok || !json.user) {
-        toast.error("No se pudo guardar", {
-          description: json.message || "Intenta nuevamente.",
-        });
-        return;
+      if (avatarFile) {
+        try {
+          const jpeg = await prepareAvatarJpeg(avatarFile);
+          const form = new FormData();
+          form.append("avatar", jpeg);
+
+          const response = await fetch(`${API_BASE_URL}/api/auth/me/avatar`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: form,
+          });
+
+          const json = (await response.json()) as UpdateAvatarResponse;
+
+          if (!response.ok || !json.ok || !json.user) {
+            toast.error("No se pudo subir la foto", {
+              description: json.message || "Intenta nuevamente.",
+            });
+          } else {
+            nextUser = {
+              ...nextUser,
+              avatarUrl: json.user.avatarUrl ?? null,
+            };
+            avatarSaved = true;
+            setAvatarFile(null);
+          }
+        } catch (error) {
+          toast.error("No se pudo preparar la foto", {
+            description: error instanceof Error ? error.message : "Intenta con otra imagen.",
+          });
+        }
       }
 
-      setUser({
-        ...user,
-        name: json.user.name,
-        phone: json.user.phone ?? null,
-        location: json.user.location ?? null,
-      });
+      if (hasRemoteChanges) {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(remotePayload),
+        });
+
+        const json = (await response.json()) as UpdateMeResponse;
+
+        if (!response.ok || !json.ok || !json.user) {
+          toast.error("No se pudo guardar en el servidor", {
+            description: json.message || "Intenta nuevamente.",
+          });
+
+			if (avatarSaved) {
+				setUser(nextUser);
+			}
+        } else {
+          setUser({
+            ...nextUser,
+            name: json.user.name,
+            phone: json.user.phone ?? null,
+            location: json.user.location ?? null,
+            avatarUrl: json.user.avatarUrl ?? nextUser.avatarUrl ?? null,
+          });
+          remoteSaved = true;
+        }
+      } else if (avatarSaved) {
+        setUser(nextUser);
+      }
 
       saveLocalProfile(user.id, {
         lastName: lastName.trim() ? lastName.trim() : undefined,
@@ -230,12 +368,32 @@ export function ProfilePage() {
         description: description.trim() ? description.trim() : undefined,
       });
 
-      toast.success("Perfil guardado", {
-        description: "Los cambios se aplicaron correctamente.",
-      });
+      if (!hasRemoteChanges && avatarSaved) {
+        toast.success("Perfil guardado", {
+          description: "Foto actualizada correctamente.",
+        });
+      } else if (!hasRemoteChanges) {
+        toast.success("Perfil guardado", {
+          description: "Cambios locales guardados correctamente.",
+        });
+      } else if (remoteSaved) {
+        toast.success("Perfil guardado", {
+          description: "Los cambios se aplicaron correctamente.",
+        });
+      } else {
+        toast.message("Cambios locales guardados", {
+          description: "Apellido/sexo/descripcion se guardaron en este dispositivo.",
+        });
+      }
     } catch {
+      saveLocalProfile(user.id, {
+        lastName: lastName.trim() ? lastName.trim() : undefined,
+        sex,
+        description: description.trim() ? description.trim() : undefined,
+      });
+
       toast.error("Error de conexión", {
-        description: "No fue posible guardar el perfil.",
+        description: "No fue posible guardar en el servidor. Se guardaron los cambios locales.",
       });
     } finally {
       setIsSaving(false);
@@ -284,31 +442,48 @@ export function ProfilePage() {
           <CardContent>
             <div className="flex flex-col md:flex-row gap-4 md:items-center">
               <div className="flex items-center gap-4">
-                <Avatar className="size-16">
-                  <AvatarImage src={avatarSrc} alt="Avatar" />
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
+                <button type="button" className="text-left" onClick={() => setIsAvatarOpen(true)}>
+                  <Avatar className="size-16">
+                    <AvatarImage src={avatarSrc} alt="Avatar" />
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                </button>
                 <div>
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{user.email}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-300">PNG/JPG/WEBP • Máx. 3MB</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{displayName}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Toca la foto para verla en grande</p>
                 </div>
               </div>
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex-1 grid grid-cols-1 gap-3">
                 <Input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   onChange={(event) => {
                     const file = event.target.files?.[0] || null;
-                    setAvatarFile(file);
+                    handlePickAvatar(file);
                   }}
                 />
-                <Button onClick={handleUploadAvatar} disabled={isUploadingAvatar || !avatarFile}>
-                  {isUploadingAvatar ? "Subiendo..." : "Subir foto"}
-                </Button>
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Formatos: JPG, PNG, WebP o HEIC. Máximo 1 MB.
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={isAvatarOpen} onOpenChange={setIsAvatarOpen}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Foto de perfil</DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center">
+              <img
+                src={avatarSrc}
+                alt="Avatar"
+                className="max-h-[70vh] w-full rounded-lg object-contain"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Card className="mb-6">
           <CardHeader>
@@ -340,12 +515,22 @@ export function ProfilePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="profile-location">Ubicación / dirección</Label>
-                <Input
-                  id="profile-location"
-                  value={location}
-                  onChange={(event) => setLocation(event.target.value)}
-                  placeholder="Ej: Barrio, dirección o punto de encuentro"
-                />
+                <Select
+                  value={locationSelectValue}
+                  onValueChange={(value) => setLocation(value === "__none__" ? "" : value)}
+                >
+                  <SelectTrigger id="profile-location">
+                    <SelectValue placeholder="Selecciona una ubicación" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin ubicación</SelectItem>
+                    {PROFILE_LOCATION_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>

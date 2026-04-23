@@ -15,6 +15,8 @@ interface BusScheduleCardProps {
   totalSeats: number;
   driver: Driver;
   onReserve: (scheduleId: string) => void;
+  onDriverClick?: (driverId: string) => void;
+  onViewOccupants?: (scheduleId: string) => void;
 }
 
 export function BusScheduleCard({
@@ -28,10 +30,15 @@ export function BusScheduleCard({
   totalSeats,
   driver,
   onReserve,
+  onDriverClick,
+  onViewOccupants,
 }: BusScheduleCardProps) {
   const occupancyPercentage = ((totalSeats - availableSeats) / totalSeats) * 100;
   const isAlmostFull = availableSeats <= 5 && availableSeats > 0;
   const isFull = availableSeats === 0;
+
+  const canOpenDriverProfile = driver.id !== "unassigned" && driver.id.length > 10;
+  const isDriverClickable = Boolean(onDriverClick) && canOpenDriverProfile;
 
   return (
     <Card className={isFull ? "opacity-60" : ""}>
@@ -87,7 +94,38 @@ export function BusScheduleCard({
           </div>
         </div>
 
-        <DriverProfile driver={driver} compact={true} />
+        {isDriverClickable ? (
+          <div
+            className="cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onClick={() => onDriverClick?.(driver.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onDriverClick?.(driver.id);
+              }
+            }}
+          >
+            <DriverProfile driver={driver} compact={true} />
+          </div>
+        ) : (
+          <DriverProfile driver={driver} compact={true} />
+        )}
+
+        {onViewOccupants ? (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="px-0"
+              onClick={() => onViewOccupants(id)}
+            >
+              Ver ocupantes
+            </Button>
+          </div>
+        ) : null}
 
         <div>
           <div className="flex items-center justify-between mb-2">

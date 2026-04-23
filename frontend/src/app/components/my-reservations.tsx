@@ -21,6 +21,7 @@ interface Reservation {
 interface MyReservationsProps {
   reservations: Reservation[];
   onCancel: (reservationId: string) => void;
+  onDriverClick?: (driverId: string) => void;
 }
 
 function parseTimeToMinutes(time: string): number {
@@ -45,6 +46,7 @@ function parseTimeToMinutes(time: string): number {
 export function MyReservations({
   reservations,
   onCancel,
+  onDriverClick,
 }: MyReservationsProps) {
   const sortedReservations = [...reservations].sort((a, b) => {
     const directionPriorityA = a.direction === "ida" ? 0 : 1;
@@ -196,7 +198,24 @@ export function MyReservations({
               </div>
             </div>
 
-            <DriverProfile driver={reservation.driver} compact={true} />
+            {onDriverClick && reservation.driver.id !== "unassigned" && reservation.driver.id.length > 10 ? (
+              <div
+                className="cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => onDriverClick(reservation.driver.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onDriverClick(reservation.driver.id);
+                  }
+                }}
+              >
+                <DriverProfile driver={reservation.driver} compact={true} />
+              </div>
+            ) : (
+              <DriverProfile driver={reservation.driver} compact={true} />
+            )}
 
             <div className="flex items-center justify-end pt-2 border-t dark:border-gray-700">
               <Button
