@@ -39,3 +39,8 @@ frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
+
+# private seed/input data
+backend/scripts/private/
+backend/scripts/*.private.json
+backend/scripts/*.private.csv
