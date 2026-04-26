@@ -9,8 +9,8 @@ import { useAuth } from "../context/auth-context";
 import { useTheme } from "../context/theme-context";
 import { Button } from "../components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { MyReservations } from "../components/my-reservations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { MyReservations, WeeklyScheduleItem } from "../components/my-reservations";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
@@ -31,6 +31,7 @@ interface Schedule {
 interface Reservation {
   id: string;
   scheduleId: string;
+  weekday?: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES" | null;
   direction: "ida" | "vuelta";
   origin: string;
   destination: string;
@@ -74,12 +75,35 @@ type MisReservasResponse = {
     id: string;
     codigo: string;
     estado: string;
+    diaSemana?: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES" | null;
+    esSemanal?: boolean;
     createdAt: string;
     horario: {
       id: string;
       salida: string;
       llegada: string | null;
     };
+  }>;
+};
+
+type HorarioSemanalResponse = {
+  ok: boolean;
+  message?: string;
+  meta?: {
+    reservasNoAsignadas?: Array<{
+      horarioId: string;
+      motivo: string;
+    }>;
+  };
+  data?: Array<{
+    dia: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES";
+    viaja: boolean;
+    primeraEntrada: string | null;
+    ultimaSalida: string | null;
+    reservaIdaHorarioId?: string | null;
+    reservaIdaHora?: string | null;
+    reservaVueltaHorarioId?: string | null;
+    reservaVueltaHora?: string | null;
   }>;
 };
 
@@ -380,6 +404,8 @@ export function StudentHome() {
   ]);
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklyScheduleItem[]>([]);
+  const [isSavingWeeklySchedule, setIsSavingWeeklySchedule] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
 
@@ -388,10 +414,37 @@ export function StudentHome() {
   const [occupantsError, setOccupantsError] = useState<string | null>(null);
   const [occupantsSchedule, setOccupantsSchedule] = useState<Schedule | null>(null);
   const [occupants, setOccupants] = useState<Array<{ id: string; name: string }>>([]);
+  const refreshWeeklySchedule = async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      setWeeklySchedule([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/horario-semanal`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = (await response.json()) as HorarioSemanalResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        setWeeklySchedule([]);
+        return;
+      }
+
+      setWeeklySchedule(result.data);
+    } catch {
+      setWeeklySchedule([]);
+    }
+  };
 
   const refreshMyReservations = async (schedulesSource?: Schedule[]) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
+      setReservations([]);
       return;
     }
 
@@ -405,6 +458,7 @@ export function StudentHome() {
       const result = (await response.json()) as MisReservasResponse;
 
       if (!response.ok || !result.ok || !result.data) {
+        setReservations([]);
         return;
       }
 
@@ -412,40 +466,41 @@ export function StudentHome() {
       const scheduleMap = new Map(source.map((schedule) => [schedule.id, schedule]));
       const detailsMap = getReservationDetailsMap();
 
-      const mappedReservations: Reservation[] = result.data
-        .map((item) => {
-          const schedule = scheduleMap.get(item.horario.id);
-          if (!schedule) {
-            return null;
-          }
+      const mappedReservations: Reservation[] = result.data.reduce<Reservation[]>((acc, item) => {
+        const schedule = scheduleMap.get(item.horario.id);
+        if (!schedule) {
+          return acc;
+        }
 
-          const savedDetails = detailsMap[item.id];
+        const savedDetails = detailsMap[item.id];
 
-          return {
-            id: item.id,
-            scheduleId: item.horario.id,
-            direction: schedule.direction,
-            origin: schedule.origin,
-            destination: schedule.destination,
-            departureTime: schedule.departureTime,
-            arrivalTime: schedule.arrivalTime,
-            userData: savedDetails || {
-              name: user?.name || "Estudiante",
-              studentId: "No registrado",
-              phone: "No registrado",
-              university: "No registrado",
-              pickupStop: "No registrado",
-              dropoffStop: "No registrado",
-            },
-            driver: schedule.driver,
-            date: new Date(item.createdAt).toLocaleDateString("es-CO"),
-          };
-        })
-        .filter((item): item is Reservation => Boolean(item));
+        acc.push({
+          id: item.id,
+          scheduleId: item.horario.id,
+          weekday: item.diaSemana || null,
+          direction: schedule.direction,
+          origin: schedule.origin,
+          destination: schedule.destination,
+          departureTime: schedule.departureTime,
+          arrivalTime: schedule.arrivalTime,
+          userData: savedDetails || {
+            name: user?.name || "Estudiante",
+            studentId: "No registrado",
+            phone: "No registrado",
+            university: "No registrado",
+            pickupStop: "No registrado",
+            dropoffStop: "No registrado",
+          },
+          driver: schedule.driver,
+          date: new Date(item.createdAt).toLocaleDateString("es-CO"),
+        });
+
+        return acc;
+      }, []);
 
       setReservations(mappedReservations);
     } catch {
-      // Keep current in-memory reservations if backend fetch fails.
+      setReservations([]);
     }
   };
 
@@ -494,15 +549,83 @@ export function StudentHome() {
 
   useEffect(() => {
     const loadData = async () => {
+      setReservations([]);
+      setWeeklySchedule([]);
       const updatedSchedules = await refreshScheduleAvailability();
       await refreshMyReservations(updatedSchedules || undefined);
+      await refreshWeeklySchedule();
     };
 
-    void loadData();
-  }, []);
+    if (!user?.id) {
+      setReservations([]);
+      setWeeklySchedule([]);
+      return;
+    }
 
-  const idaSchedules = schedules.filter((schedule) => schedule.direction === "ida");
-  const vueltaSchedules = schedules.filter((schedule) => schedule.direction === "vuelta");
+    void loadData();
+  }, [user?.id]);
+
+  const handleSaveWeeklySchedule = async (items: WeeklyScheduleItem[]) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      toast.error("Sesion expirada", {
+        description: "Inicia sesion nuevamente.",
+      });
+      navigate("/login");
+      return false;
+    }
+
+    setIsSavingWeeklySchedule(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reservas/horario-semanal`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ horarios: items }),
+      });
+
+      const result = (await response.json()) as HorarioSemanalResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        toast.error("No se pudo guardar", {
+          description: result.message || "Revisa los horarios e intenta de nuevo.",
+        });
+        return false;
+      }
+
+      setWeeklySchedule(result.data);
+
+      if (result.meta?.reservasNoAsignadas?.length) {
+        toast.error("Algunas reservas no se asignaron", {
+          description: "Revisa cupos disponibles en los horarios sugeridos.",
+        });
+      }
+
+      toast.success("Horario semanal actualizado", {
+        description: "Tus horarios de lunes a viernes fueron guardados.",
+      });
+      return true;
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible guardar el horario semanal.",
+      });
+      return false;
+    } finally {
+      setIsSavingWeeklySchedule(false);
+    }
+  };
+
+  const reservedScheduleIds = new Set(reservations.map((reservation) => reservation.scheduleId));
+
+  const idaSchedules = schedules.filter(
+    (schedule) => schedule.direction === "ida" && !reservedScheduleIds.has(schedule.id)
+  );
+  const vueltaSchedules = schedules.filter(
+    (schedule) => schedule.direction === "vuelta" && !reservedScheduleIds.has(schedule.id)
+  );
 
   const handleReserve = (scheduleId: string) => {
     const schedule = schedules.find((s) => s.id === scheduleId);
@@ -785,6 +908,9 @@ export function StudentHome() {
               reservations={reservations}
               onCancel={handleCancelReservation}
               onDriverClick={handleOpenDriverProfile}
+              weeklySchedule={weeklySchedule}
+              onSaveWeeklySchedule={handleSaveWeeklySchedule}
+              isSavingWeeklySchedule={isSavingWeeklySchedule}
             />
           </TabsContent>
         </Tabs>

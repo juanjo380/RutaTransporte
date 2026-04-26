@@ -4,6 +4,8 @@ import {
 	cancelarReservaAdmin,
 	cancelarReservasUsuarioAdmin,
 	crearReserva,
+	guardarHorarioSemanalEstudiante,
+	listarHorarioSemanalEstudiante,
 	listarMisReservas,
 	listarReservasAdmin,
 } from "../controllers/reservasController.js";
@@ -14,6 +16,8 @@ const router = Router();
 
 router.post("/", requireAuth, crearReserva);
 router.get("/mias", requireAuth, listarMisReservas);
+router.get("/horario-semanal", requireAuth, listarHorarioSemanalEstudiante);
+router.put("/horario-semanal", requireAuth, guardarHorarioSemanalEstudiante);
 router.delete("/:reservaId", requireAuth, cancelarMiReserva);
 router.get("/admin", requireAuth, requireAdmin, listarReservasAdmin);
 router.delete("/admin/:reservaId", requireAuth, requireAdmin, cancelarReservaAdmin);

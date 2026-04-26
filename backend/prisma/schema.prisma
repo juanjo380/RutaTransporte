@@ -18,6 +18,7 @@ model Usuario {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   reservas  Reserva[]
+  horariosSemanales HorarioSemanalEstudiante[]
   horariosConducidos Horario[] @relation("ConductorHorarios")
 }
 
@@ -54,6 +55,8 @@ model Reserva {
   id         String     @id @default(cuid())
   usuarioId  String
   horarioId  String
+  diaSemana  DiaSemana?
+  esSemanal  Boolean    @default(false)
   usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   horario    Horario    @relation(fields: [horarioId], references: [id], onDelete: Cascade)
   estado     EstadoReserva @default(ACTIVA)
@@ -61,7 +64,22 @@ model Reserva {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  @@unique([usuarioId, horarioId])
+  @@unique([usuarioId, horarioId, diaSemana])
+}
+
+model HorarioSemanalEstudiante {
+  id             String    @id @default(cuid())
+  usuarioId      String
+  usuario        Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  dia            DiaSemana
+  viaja          Boolean   @default(true)
+  primeraEntrada String?
+  ultimaSalida   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([usuarioId, dia])
+  @@index([usuarioId])
 }
 
 enum Rol {
@@ -74,4 +92,12 @@ enum EstadoReserva {
   ACTIVA
   CANCELADA
   COMPLETADA
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
 }
