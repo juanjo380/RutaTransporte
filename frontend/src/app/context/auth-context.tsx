@@ -8,6 +8,7 @@ export interface User {
   name: string;
   phone?: string | null;
   location?: string | null;
+  avatarUrl?: string | null;
   role: UserRole;
   driverId?: string; // For drivers
 }

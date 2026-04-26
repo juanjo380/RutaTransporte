@@ -4,6 +4,7 @@ import { StudentHome } from "./pages/student-home";
 import { AdminDashboard } from "./pages/admin-dashboard";
 import { DriverView } from "./pages/driver-view";
 import { ProfilePage } from "@/app/pages/profile";
+import { UserProfilePage } from "./pages/user-profile";
 import { ProtectedRoute } from "./components/protected-route";
 import { RoleBasedRedirect } from "./components/role-based-redirect";
 
@@ -49,6 +50,14 @@ export const appRoutes: RouteObject[] = [
     element: (
       <ProtectedRoute>
         <ProfilePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/users/:userId",
+    element: (
+      <ProtectedRoute>
+        <UserProfilePage />
       </ProtectedRoute>
     ),
   },

@@ -156,14 +156,20 @@ export function DriverView() {
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate("/profile")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    navigate("/profile");
+                  }
+                }}
+              >
                 <User className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate("/profile")}>
-                <User className="size-4 mr-2" />
-                Perfil
-              </Button>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
               </Button>
@@ -286,7 +292,17 @@ export function DriverView() {
                           <div className="bg-green-100 dark:bg-green-900/30 rounded-full size-10 flex items-center justify-center">
                             <span className="font-semibold text-green-700 dark:text-green-200">{index + 1}</span>
                           </div>
-                          <div>
+                          <div
+                            className="cursor-pointer"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate(`/users/${reservation.usuario.id}`)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                navigate(`/users/${reservation.usuario.id}`);
+                              }
+                            }}
+                          >
                             <CardTitle className="text-base">{reservation.usuario.nombre}</CardTitle>
                             <p className="text-sm text-gray-600 dark:text-gray-300">{reservation.usuario.email}</p>
                           </div>

@@ -5,6 +5,7 @@ import { prisma } from "./src/lib/prisma.js";
 import authRoutes from "./src/routes/auth.js";
 import reservasRoutes from "./src/routes/reservas.js";
 import horariosRoutes from "./src/routes/horarios.js";
+import usersRoutes from "./src/routes/users.js";
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/users", usersRoutes);
 app.use("/api/reservas", reservasRoutes);
 app.use("/api/horarios", horariosRoutes);
 
@@ -34,14 +36,6 @@ app.get("/db-check", async (_req, res) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  if (error?.code === "LIMIT_FILE_SIZE") {
-    return res.status(413).json({ ok: false, message: "El archivo supera el limite permitido" });
-  }
-
-  if (error?.message === "Formato de imagen no permitido") {
-    return res.status(400).json({ ok: false, message: error.message });
-  }
-
   res.status(500).json({ ok: false, message: "Internal server error" });
 });
 

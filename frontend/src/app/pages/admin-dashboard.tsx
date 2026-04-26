@@ -56,6 +56,7 @@ type Schedule = {
 type Reservation = {
   id: string;
   codigo: string;
+  studentId: string;
   studentName: string;
   studentEmail: string;
   university: string;
@@ -85,6 +86,7 @@ type AdminReservasResponse = {
     estado: string;
     createdAt: string;
     usuario: {
+      id: string;
       nombre: string;
       email: string;
     };
@@ -217,6 +219,7 @@ export function AdminDashboard() {
         const mappedReservations = (reservasJson.data || []).map((reserva) => ({
           id: reserva.id,
           codigo: reserva.codigo,
+          studentId: reserva.usuario.id,
           studentName: reserva.usuario.nombre,
           studentEmail: reserva.usuario.email,
           university: "No informado",
@@ -556,14 +559,20 @@ export function AdminDashboard() {
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate("/profile")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    navigate("/profile");
+                  }
+                }}
+              >
                 <User className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name}</span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate("/profile")}>
-                <UserCog className="size-4 mr-2" />
-                Perfil
-              </Button>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
               </Button>
@@ -700,7 +709,19 @@ export function AdminDashboard() {
                               <div className="flex items-center gap-2">
                                 <GraduationCap className="size-4 text-gray-600" />
                                 <div>
-                                  <p className="text-sm font-medium">{student.studentName}</p>
+                                  <p
+                                    className="text-sm font-medium cursor-pointer"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => navigate(`/users/${student.studentId}`)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter" || event.key === " ") {
+                                        navigate(`/users/${student.studentId}`);
+                                      }
+                                    }}
+                                  >
+                                    {student.studentName}
+                                  </p>
                                   <p className="text-xs text-gray-600 dark:text-gray-300">{student.studentEmail}</p>
                                   <Badge className={`mt-1 text-xs ${mapReservationStatusBadgeClass(student.status)}`}>
                                     {mapReservationStatusLabel(student.status)}
