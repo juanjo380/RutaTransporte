@@ -6,6 +6,7 @@ import authRoutes from "./src/routes/auth.js";
 import reservasRoutes from "./src/routes/reservas.js";
 import horariosRoutes from "./src/routes/horarios.js";
 import usersRoutes from "./src/routes/users.js";
+import adminRoutes from "./src/routes/admin.js";
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/reservas", reservasRoutes);
 app.use("/api/horarios", horariosRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "ruta-transporte-backend" });

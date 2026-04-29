@@ -29,6 +29,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
+    "nodemailer": "^6.10.1",
     "pg": "^8.20.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
