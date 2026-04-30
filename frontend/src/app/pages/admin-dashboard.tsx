@@ -29,6 +29,7 @@ import {
 } from "../components/ui/select";
 import { toast } from "sonner";
 import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
@@ -68,6 +69,7 @@ type Reservation = {
 };
 
 type ReservationStatusFilter = "ACTIVA" | "CANCELADA" | "COMPLETADA";
+
 
 type DriverAvailability = {
   id: string;
@@ -185,6 +187,10 @@ export function AdminDashboard() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAssigningScheduleId, setIsAssigningScheduleId] = useState<string | null>(null);
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationScheduleId, setNotificationScheduleId] = useState("");
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   const fetchDashboardData = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -545,6 +551,69 @@ export function AdminDashboard() {
 
   const totalReservations = reservations.length;
   const totalStudents = new Set(reservations.map((reservation) => reservation.studentEmail)).size;
+  const handleSendNotification = async () => {
+    const titulo = notificationTitle.trim();
+    const mensaje = notificationMessage.trim();
+
+    if (!titulo || !mensaje) {
+      toast.error("Titulo y mensaje requeridos", {
+        description: "Completa el titulo y el mensaje antes de enviar.",
+      });
+      return;
+    }
+
+    if (!notificationScheduleId) {
+      toast.error("Selecciona un horario", {
+        description: "Debes elegir un horario para enviar la notificacion.",
+      });
+      return;
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsSendingNotification(true);
+    try {
+      const payload: Record<string, string> = {
+        titulo,
+        mensaje,
+        horarioId: notificationScheduleId,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/notificaciones/contratiempo`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok: boolean; message?: string; data?: { enviados?: number } };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo enviar la notificacion", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Notificacion enviada", {
+        description: `Correos enviados: ${result.data?.enviados ?? 0}.`,
+      });
+      setNotificationTitle("");
+      setNotificationMessage("");
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible enviar la notificacion.",
+      });
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
@@ -771,6 +840,58 @@ export function AdminDashboard() {
                 </Select>
               </div>
             </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Notificar contratiempo</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Envía un correo a estudiantes con reservas activas según ruta u horario.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Input
+                    placeholder="Titulo de la notificacion"
+                    value={notificationTitle}
+                    onChange={(event) => setNotificationTitle(event.target.value)}
+                  />
+                </div>
+
+                <Select value={notificationScheduleId} onValueChange={setNotificationScheduleId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un horario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schedules.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        Sin horarios disponibles
+                      </SelectItem>
+                    ) : (
+                      schedules.map((schedule) => (
+                        <SelectItem key={schedule.id} value={schedule.id}>
+                          {schedule.departureTime} - {schedule.arrivalTime}
+                          {schedule.route
+                            ? ` | ${schedule.route.nombre} (${schedule.route.origen} -> ${schedule.route.destino})`
+                            : ""}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+
+                <Textarea
+                  placeholder="Mensaje para los estudiantes"
+                  value={notificationMessage}
+                  onChange={(event) => setNotificationMessage(event.target.value)}
+                />
+
+                <div className="flex justify-end">
+                  <Button onClick={handleSendNotification} disabled={isSendingNotification}>
+                    Enviar notificacion
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader className="pb-3">
