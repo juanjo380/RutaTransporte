@@ -82,7 +82,7 @@ type DriverAvailability = {
 type AdminReservasResponse = {
   ok: boolean;
   message?: string;
-  data?: Array<{
+  data?: {
     id: string;
     codigo: string;
     estado: string;
@@ -99,7 +99,7 @@ type AdminReservasResponse = {
       cupoTotal: number;
       cupoOcupado: number;
     };
-  }>;
+  }[];
 };
 
 type HorariosResponse = {
@@ -144,6 +144,32 @@ function formatTime(value: string | null | undefined) {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+const VUELTA_SCHEDULE_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
+
+function getScheduleTime(schedule: Pick<Schedule, "arrivalTime" | "departureTime"> | null | undefined) {
+  if (!schedule) {
+    return "";
+  }
+
+  return schedule.arrivalTime || schedule.departureTime || "-";
+}
+
+function getScheduleRoute(schedule: Pick<Schedule, "id" | "route">) {
+  if (!schedule.route) {
+    return null;
+  }
+
+  const isVuelta = VUELTA_SCHEDULE_IDS.has(schedule.id);
+  const origin = isVuelta ? schedule.route.destino : schedule.route.origen;
+  const destination = isVuelta ? schedule.route.origen : schedule.route.destino;
+
+  return {
+    origin,
+    destination,
+    name: `${origin} - ${destination}`,
+  };
 }
 
 function mapReservationStatusLabel(status: string) {
@@ -399,9 +425,10 @@ export function AdminDashboard() {
   const handleAssignDriver = async (scheduleId: string, driverId: string) => {
     const schedule = schedules.find((item) => item.id === scheduleId);
     const driver = (availableDriversBySchedule[scheduleId] || []).find((item) => item.id === driverId);
+    const scheduleTime = getScheduleTime(schedule);
 
     const confirmation = window.confirm(
-      `Confirmar asignacion de ${driver?.nombre || "conductor"} al horario ${schedule?.departureTime || ""} - ${schedule?.arrivalTime || ""}?`
+      `Confirmar asignacion de ${driver?.nombre || "conductor"} al horario ${scheduleTime}?`
     );
 
     if (!confirmation) {
@@ -454,9 +481,10 @@ export function AdminDashboard() {
 
   const handleUnassignDriver = async (scheduleId: string) => {
     const schedule = schedules.find((item) => item.id === scheduleId);
+    const scheduleTime = getScheduleTime(schedule);
 
     const confirmation = window.confirm(
-      `Confirmar desasignacion del conductor para el horario ${schedule?.departureTime || ""} - ${schedule?.arrivalTime || ""}?`
+      `Confirmar desasignacion del conductor para el horario ${scheduleTime}?`
     );
 
     if (!confirmation) {
@@ -526,10 +554,14 @@ export function AdminDashboard() {
 
       return {
         scheduleId: schedule.id,
-        scheduleLabel: `${schedule.departureTime} - ${schedule.arrivalTime}`,
-        routeLabel: schedule.route
-          ? `${schedule.route.nombre} (${schedule.route.origen} -> ${schedule.route.destino})`
-          : "Ruta sin informacion",
+        scheduleLabel: getScheduleTime(schedule),
+        routeLabel: (() => {
+          const route = getScheduleRoute(schedule);
+          if (!route) {
+            return "Ruta sin informacion";
+          }
+          return `${route.name} (${route.origin} -> ${route.destination})`;
+        })(),
         occupiedSeats,
         totalSeats,
         occupancyPct,
@@ -731,9 +763,13 @@ export function AdminDashboard() {
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Clock className="size-5 text-purple-600" />
-                          {schedule.departureTime} - {schedule.arrivalTime}
+                          {getScheduleTime(schedule)}
                         </CardTitle>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Ruta: Buga → Tuluá</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                          Ruta: {getScheduleRoute(schedule)
+                            ? `${getScheduleRoute(schedule)?.origin} -> ${getScheduleRoute(schedule)?.destination}`
+                            : "Ruta sin informacion"}
+                        </p>
                       </div>
                       <div className="text-right">
                         <div className="text-3xl font-bold text-purple-900 dark:text-purple-200">{schedule.studentCount}</div>
@@ -869,9 +905,9 @@ export function AdminDashboard() {
                     ) : (
                       schedules.map((schedule) => (
                         <SelectItem key={schedule.id} value={schedule.id}>
-                          {schedule.departureTime} - {schedule.arrivalTime}
-                          {schedule.route
-                            ? ` | ${schedule.route.nombre} (${schedule.route.origen} -> ${schedule.route.destino})`
+                          {getScheduleTime(schedule)}
+                          {getScheduleRoute(schedule)
+                            ? ` | ${getScheduleRoute(schedule)?.name} (${getScheduleRoute(schedule)?.origin} -> ${getScheduleRoute(schedule)?.destination})`
                             : ""}
                         </SelectItem>
                       ))
@@ -910,7 +946,7 @@ export function AdminDashboard() {
                       <SelectItem value="all">Todos los horarios</SelectItem>
                       {schedules.map((schedule) => (
                         <SelectItem key={schedule.id} value={schedule.id}>
-                          {schedule.departureTime} - {schedule.arrivalTime}
+                          {getScheduleTime(schedule)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -992,7 +1028,7 @@ export function AdminDashboard() {
                             <div className="flex items-center gap-2">
                               <Clock className="size-4 text-gray-500" />
                               <span className="font-medium">
-                                {schedule.departureTime} - {schedule.arrivalTime}
+                                {getScheduleTime(schedule)}
                               </span>
                             </div>
                           </td>
@@ -1093,7 +1129,7 @@ export function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Clock className="size-5 text-purple-600" />
-                          {schedule.departureTime} - {schedule.arrivalTime}
+                          {getScheduleTime(schedule)}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary">{selectableDrivers.length} disponibles</Badge>

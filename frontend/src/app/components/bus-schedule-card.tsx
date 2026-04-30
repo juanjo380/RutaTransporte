@@ -36,6 +36,7 @@ export function BusScheduleCard({
   const occupancyPercentage = ((totalSeats - availableSeats) / totalSeats) * 100;
   const isAlmostFull = availableSeats <= 5 && availableSeats > 0;
   const isFull = availableSeats === 0;
+  const scheduleTime = arrivalTime || departureTime;
 
   const canOpenDriverProfile = driver.id !== "unassigned" && driver.id.length > 10;
   const isDriverClickable = Boolean(onDriverClick) && canOpenDriverProfile;
@@ -84,12 +85,8 @@ export function BusScheduleCard({
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {direction === "vuelta" ? "Hora de salida" : "Hora de llegada"}
-              </p>
-              <p className="font-semibold dark:text-gray-100">
-                {direction === "vuelta" ? departureTime : arrivalTime}
-              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Hora</p>
+              <p className="font-semibold dark:text-gray-100">{scheduleTime}</p>
             </div>
           </div>
         </div>
