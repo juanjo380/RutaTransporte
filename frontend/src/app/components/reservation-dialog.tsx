@@ -109,6 +109,7 @@ export function ReservationDialog({
   });
 
   const isVuelta = scheduleInfo?.direction === "vuelta";
+  const scheduleTime = scheduleInfo?.arrivalTime || scheduleInfo?.departureTime || "";
   const pickupStops = isVuelta ? [FIXED_UCEVA_STOP] : IDA_PICKUP_STOPS;
   const dropoffStops = isVuelta ? VUELTA_DROPOFF_STOPS : [FIXED_UCEVA_STOP];
 
@@ -165,7 +166,7 @@ export function ReservationDialog({
           <DialogDescription>
             {scheduleInfo && (
               <>
-                Llegada a las {scheduleInfo.arrivalTime} ({scheduleInfo.origin} - {scheduleInfo.destination})
+                Hora: {scheduleTime} ({scheduleInfo.origin} - {scheduleInfo.destination})
               </>
             )}
           </DialogDescription>

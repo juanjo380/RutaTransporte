@@ -70,6 +70,36 @@ function formatTime(value: string | null | undefined) {
   });
 }
 
+function formatDate(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleDateString("es-CO", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+const VUELTA_SCHEDULE_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
+
+function getRouteDisplay(schedule: DriverSchedule) {
+  if (!schedule.ruta) {
+    return { origin: "-", destination: "-", name: "-" };
+  }
+
+  const isVuelta = VUELTA_SCHEDULE_IDS.has(schedule.id);
+  const origin = isVuelta ? schedule.ruta.destino : schedule.ruta.origen;
+  const destination = isVuelta ? schedule.ruta.origen : schedule.ruta.destino;
+
+  return {
+    origin,
+    destination,
+    name: `${origin} - ${destination}`,
+  };
+}
+
 export function DriverView() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +164,11 @@ export function DriverView() {
   const selectedSchedule = useMemo(
     () => schedules.find((schedule) => schedule.id === selectedScheduleId) || null,
     [schedules, selectedScheduleId]
+  );
+
+  const selectedRoute = useMemo(
+    () => (selectedSchedule ? getRouteDisplay(selectedSchedule) : null),
+    [selectedSchedule]
   );
 
   const totalStudentsToday = useMemo(
@@ -243,7 +278,12 @@ export function DriverView() {
                     className="flex items-center gap-2"
                   >
                     <Clock className="size-4" />
-                    {formatTime(schedule.salida)} - {formatTime(schedule.llegada || schedule.salida)}
+                    <span className="flex flex-col items-start">
+                      <span className="text-sm">{formatTime(schedule.llegada || schedule.salida)}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-300">
+                        {formatDate(schedule.salida)}
+                      </span>
+                    </span>
                     <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
                       {schedule.reservas.length} pasajeros
                     </Badge>
@@ -260,13 +300,16 @@ export function DriverView() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
-                    Ruta: {formatTime(selectedSchedule.salida)} - {formatTime(selectedSchedule.llegada || selectedSchedule.salida)}
+                    Ruta: {formatDate(selectedSchedule.salida)} · {formatTime(selectedSchedule.llegada || selectedSchedule.salida)}
                   </h2>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                     <MapPin className="size-4" />
                     <span>
-                      {selectedSchedule.ruta?.origen || "-"} {"->"} {selectedSchedule.ruta?.destino || "-"}
+                      {selectedRoute?.origin || "-"} {"->"} {selectedRoute?.destination || "-"}
                     </span>
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
+                    Detalle de ruta: {selectedRoute?.name || "-"}
                   </div>
                 </div>
                 <div className="text-right">

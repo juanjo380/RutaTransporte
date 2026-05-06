@@ -114,6 +114,10 @@ function parseTimeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
+function getReservationTime(reservation: Pick<Reservation, "arrivalTime" | "departureTime">) {
+  return reservation.arrivalTime || reservation.departureTime || "Sin definir";
+}
+
 export function MyReservations({
   reservations,
   onCancel,
@@ -341,18 +345,18 @@ export function MyReservations({
                 <div className="flex items-center gap-2">
                   <Clock className="size-4 text-gray-500 dark:text-gray-400" />
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Entrada (Ida)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Hora (Ida)</p>
                     <p className="text-sm font-medium dark:text-gray-100">
-                      {firstEntryReservation ? firstEntryReservation.arrivalTime : "Sin reserva"}
+                      {firstEntryReservation ? getReservationTime(firstEntryReservation) : "Sin reserva"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="size-4 text-gray-500 dark:text-gray-400" />
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Salida (Vuelta)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Hora (Vuelta)</p>
                     <p className="text-sm font-medium dark:text-gray-100">
-                      {firstReturnReservation ? firstReturnReservation.departureTime : "Sin reserva"}
+                      {firstReturnReservation ? getReservationTime(firstReturnReservation) : "Sin reserva"}
                     </p>
                   </div>
                 </div>
@@ -389,12 +393,8 @@ export function MyReservations({
                   <div className="flex items-center gap-2">
                     <Clock className="size-4 text-gray-500 dark:text-gray-400" />
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {reservation.direction === "vuelta" ? "Hora de salida" : "Hora de llegada"}
-                      </p>
-                      <p className="text-sm font-medium dark:text-gray-100">
-                        {reservation.direction === "vuelta" ? reservation.departureTime : reservation.arrivalTime}
-                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Hora</p>
+                      <p className="text-sm font-medium dark:text-gray-100">{getReservationTime(reservation)}</p>
                     </div>
                   </div>
                 </div>

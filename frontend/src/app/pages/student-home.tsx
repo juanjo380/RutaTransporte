@@ -171,6 +171,10 @@ function mapConductorToDriver(
   };
 }
 
+function getScheduleTime(schedule: Pick<Schedule, "arrivalTime" | "departureTime">) {
+  return schedule.arrivalTime || schedule.departureTime || "-";
+}
+
 export function StudentHome() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -738,7 +742,7 @@ export function StudentHome() {
       await refreshMyReservations(updatedSchedules || undefined);
 
       toast.success("Reserva confirmada", {
-        description: result.message || `Tu cupo para llegar a las ${selectedSchedule.arrivalTime} ha sido reservado.`,
+        description: result.message || `Tu cupo para las ${getScheduleTime(selectedSchedule)} ha sido reservado.`,
       });
     } catch {
       toast.error("Error de conexion", {
@@ -835,7 +839,7 @@ export function StudentHome() {
               </Button>
             </div>
           </div>
-          <p className="text-lg text-gray-700 dark:text-gray-300">Buga - Tuluá</p>
+          <p className="text-lg text-gray-700 dark:text-gray-300">Buga - Tuluá / Tuluá - Buga</p>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Sistema de reserva de cupos para estudiantes
           </p>
