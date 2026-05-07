@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import {
   Bus,
+  Calendar,
   LogOut,
   User,
   Clock,
@@ -35,6 +36,7 @@ type DriverReservation = {
 
 type DriverSchedule = {
   id: string;
+  direccion?: "IDA" | "VUELTA" | null;
   salida: string;
   llegada: string | null;
   ruta: {
@@ -43,6 +45,19 @@ type DriverSchedule = {
     destino: string;
   };
   reservas: DriverReservation[];
+};
+
+type CalendarioResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    diaSemana: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES" | null;
+    diaLabel: string | null;
+    fechaIso: string;
+    fechaLabel: string;
+    esDiaSiguiente: boolean;
+    cutoffHour: number;
+  };
 };
 
 type DriverViewResponse = {
@@ -82,14 +97,12 @@ function formatDate(value: string | null | undefined) {
   });
 }
 
-const VUELTA_SCHEDULE_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
-
 function getRouteDisplay(schedule: DriverSchedule) {
   if (!schedule.ruta) {
     return { origin: "-", destination: "-", name: "-" };
   }
-
-  const isVuelta = VUELTA_SCHEDULE_IDS.has(schedule.id);
+  const direction = String(schedule.direccion || "").toUpperCase();
+  const isVuelta = direction === "VUELTA";
   const origin = isVuelta ? schedule.ruta.destino : schedule.ruta.origen;
   const destination = isVuelta ? schedule.ruta.origen : schedule.ruta.destino;
 
@@ -109,10 +122,26 @@ export function DriverView() {
   const [driverInfo, setDriverInfo] = useState<{ id: string; nombre: string; email: string } | null>(null);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [calendarContext, setCalendarContext] = useState<CalendarioResponse["data"] | null>(null);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const fetchCalendarContext = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/calendario/estado`);
+      const result = (await response.json()) as CalendarioResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        return;
+      }
+
+      setCalendarContext(result.data);
+    } catch {
+      // Ignore calendar errors to keep UI usable.
+    }
   };
 
   const fetchDriverData = async () => {
@@ -158,6 +187,7 @@ export function DriverView() {
   };
 
   useEffect(() => {
+    void fetchCalendarContext();
     void fetchDriverData();
   }, []);
 
@@ -213,6 +243,24 @@ export function DriverView() {
                 Salir
               </Button>
             </div>
+            {calendarContext?.diaLabel ? (
+              <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3">
+                <div className="bg-green-600 p-2 rounded-lg">
+                  <Calendar className="size-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                    Dia asignado
+                  </p>
+                  <p className="text-xl font-semibold text-green-900 dark:text-green-200">
+                    {calendarContext.diaLabel}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {calendarContext.fechaLabel}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -281,7 +329,7 @@ export function DriverView() {
                     <span className="flex flex-col items-start">
                       <span className="text-sm">{formatTime(schedule.llegada || schedule.salida)}</span>
                       <span className="text-xs text-gray-500 dark:text-gray-300">
-                        {formatDate(schedule.salida)}
+                        {calendarContext?.fechaLabel || formatDate(schedule.salida)}
                       </span>
                     </span>
                     <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
@@ -300,7 +348,7 @@ export function DriverView() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
-                    Ruta: {formatDate(selectedSchedule.salida)} · {formatTime(selectedSchedule.llegada || selectedSchedule.salida)}
+                    {calendarContext?.fechaLabel || formatDate(selectedSchedule.salida)}
                   </h2>
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                     <MapPin className="size-4" />

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Bus, Camera, LogOut, Moon, Sun, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Bus, Camera, LogOut, Moon, Sun, User as UserIcon } from "lucide-react";
 
 import { useAuth } from "../context/auth-context";
 import { useTheme } from "../context/theme-context";
@@ -26,6 +26,7 @@ type LocalProfile = {
   lastName?: string;
   sex?: "MASCULINO" | "FEMENINO" | "OTRO" | "NO_ESPECIFICA";
   description?: string;
+  university?: string;
 };
 
 type UpdateMeResponse = {
@@ -70,6 +71,11 @@ const PROFILE_LOCATION_OPTIONS = [
   "Tulua - UCEVA",
 ].filter((item) => item.trim().length > 0);
 
+const UNIVERSITY_OPTIONS = [
+  { value: "UCEVA", label: "UCEVA" },
+  { value: "Universidad del Valle", label: "Universidad del Valle" },
+];
+
 function getGeneratedAvatarUrl(seed: string) {
   const base = "https://api.dicebear.com/7.x/initials/svg";
   const url = new URL(base);
@@ -95,6 +101,43 @@ function saveLocalProfile(userId: string, profile: LocalProfile) {
   );
 }
 
+function stripLastName(fullName: string, lastName: string) {
+  const base = (fullName || "").trim();
+  const ln = (lastName || "").trim();
+  if (!base || !ln) {
+    return base;
+  }
+
+  const lowerBase = base.toLowerCase();
+  const lowerLn = ln.toLowerCase();
+
+  if (lowerBase === lowerLn) {
+    return base;
+  }
+
+  if (lowerBase.endsWith(` ${lowerLn}`)) {
+    return base.slice(0, base.length - ln.length).trim();
+  }
+
+  return base;
+}
+
+function buildFullName(name: string, lastName: string) {
+  const base = (name || "").trim();
+  const ln = (lastName || "").trim();
+  if (!ln) {
+    return base;
+  }
+
+  const lowerBase = base.toLowerCase();
+  const lowerLn = ln.toLowerCase();
+  if (lowerBase === lowerLn || lowerBase.endsWith(` ${lowerLn}`)) {
+    return base;
+  }
+
+  return `${base} ${ln}`.trim();
+}
+
 export function ProfilePage() {
   const { user, logout, setUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -107,6 +150,7 @@ export function ProfilePage() {
   const [lastName, setLastName] = useState("");
   const [sex, setSex] = useState<LocalProfile["sex"]>("NO_ESPECIFICA");
   const [description, setDescription] = useState("");
+  const [university, setUniversity] = useState("");
 
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -127,6 +171,10 @@ export function ProfilePage() {
     setLastName(localProfile.lastName || "");
     setSex(localProfile.sex || "NO_ESPECIFICA");
     setDescription(localProfile.description || "");
+    setUniversity(localProfile.university || "");
+    if (localProfile.lastName) {
+      setName(stripLastName(user.name || "", localProfile.lastName));
+    }
   }, [user]);
 
   const avatarSrc = useMemo(() => {
@@ -239,7 +287,7 @@ export function ProfilePage() {
   const displayName = useMemo(() => {
     const base = (name || user?.name || "").trim();
     const ln = (lastName || "").trim();
-    const result = ln ? `${base} ${ln}`.trim() : base;
+    const result = buildFullName(base, ln);
     return result || user?.name || "";
   }, [lastName, name, user?.name]);
 
@@ -248,6 +296,17 @@ export function ProfilePage() {
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const handleBackToPanel = () => {
+    const role = user?.role;
+    if (role === "admin") {
+      navigate("/admin-dashboard");
+    } else if (role === "driver") {
+      navigate("/driver-view");
+    } else {
+      navigate("/");
+    }
   };
 
   const handlePickAvatar = (file: File | null) => {
@@ -279,7 +338,7 @@ export function ProfilePage() {
       return;
     }
 
-    const remotePayload = { name, phone, location };
+    const remotePayload = { name: buildFullName(name, lastName), phone, location };
 
     const hasRemoteChanges =
       (remotePayload.name || "").trim() !== (user.name || "").trim() ||
@@ -366,6 +425,7 @@ export function ProfilePage() {
         lastName: lastName.trim() ? lastName.trim() : undefined,
         sex,
         description: description.trim() ? description.trim() : undefined,
+        university: university.trim() ? university.trim() : undefined,
       });
 
       if (!hasRemoteChanges && avatarSaved) {
@@ -390,6 +450,7 @@ export function ProfilePage() {
         lastName: lastName.trim() ? lastName.trim() : undefined,
         sex,
         description: description.trim() ? description.trim() : undefined,
+        university: university.trim() ? university.trim() : undefined,
       });
 
       toast.error("Error de conexión", {
@@ -417,6 +478,10 @@ export function ProfilePage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleBackToPanel}>
+                <ArrowLeft className="size-4 mr-2" />
+                Volver al panel
+              </Button>
               <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
                 <UserIcon className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user.name}</span>
@@ -550,6 +615,29 @@ export function ProfilePage() {
                   onChange={(event) => setLastName(event.target.value)}
                   placeholder="Tu apellido"
                 />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Se guarda en tu navegador (no se envía a la BD).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="profile-university">Universidad</Label>
+                <Select
+                  value={university || "__none__"}
+                  onValueChange={(value) => setUniversity(value === "__none__" ? "" : value)}
+                >
+                  <SelectTrigger id="profile-university">
+                    <SelectValue placeholder="Selecciona una universidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sin universidad</SelectItem>
+                    {UNIVERSITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-gray-600 dark:text-gray-300">
                   Se guarda en tu navegador (no se envía a la BD).
                 </p>

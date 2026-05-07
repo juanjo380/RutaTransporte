@@ -37,6 +37,7 @@ model Horario {
   id         String     @id @default(cuid())
   rutaId     String
   ruta       Ruta       @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+  direccion  Direccion  @default(IDA)
   conductorId String?
   conductor  Usuario?   @relation("ConductorHorarios", fields: [conductorId], references: [id], onDelete: SetNull)
   salida     DateTime
@@ -92,6 +93,11 @@ enum EstadoReserva {
   ACTIVA
   CANCELADA
   COMPLETADA
+}
+
+enum Direccion {
+  IDA
+  VUELTA
 }
 
 enum DiaSemana {

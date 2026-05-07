@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BusScheduleCard } from "../components/bus-schedule-card";
 import { ReservationDialog, ReservationData } from "../components/reservation-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -15,6 +15,9 @@ import { MyReservations, WeeklyScheduleItem } from "../components/my-reservation
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 const TOKEN_STORAGE_KEY = "ruta_transporte_token";
 const RESERVATION_DETAILS_STORAGE_KEY = "ruta_transporte_reservation_details";
+const RESERVATION_PROFILE_STORAGE_KEY = "ruta_transporte_reservation_profile";
+const FIXED_UCEVA_STOP = "Tulua - UCEVA";
+const LOCAL_PROFILE_KEY_PREFIX = "ruta_transporte_local_profile_";
 
 interface Schedule {
   id: string;
@@ -23,6 +26,8 @@ interface Schedule {
   destination: string;
   departureTime: string;
   arrivalTime: string;
+  departureAt: string;
+  arrivalAt: string | null;
   availableSeats: number;
   totalSeats: number;
   driver: Driver;
@@ -58,14 +63,36 @@ type HorarioOcupacionResponse = {
   message?: string;
   data?: Array<{
     id: string;
+    direccion?: "IDA" | "VUELTA" | null;
+    salida: string;
+    llegada: string | null;
     cupoTotal: number;
     cupoOcupado: number;
+    ruta?: {
+      id: string;
+      nombre: string;
+      origen: string;
+      destino: string;
+    } | null;
     conductor?: {
       id: string;
       nombre: string;
       email: string;
     } | null;
   }>;
+};
+
+type CalendarioResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    diaSemana: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES" | null;
+    diaLabel: string | null;
+    fechaIso: string;
+    fechaLabel: string;
+    esDiaSiguiente: boolean;
+    cutoffHour: number;
+  };
 };
 
 type MisReservasResponse = {
@@ -80,8 +107,15 @@ type MisReservasResponse = {
     createdAt: string;
     horario: {
       id: string;
+      direccion?: "IDA" | "VUELTA" | null;
       salida: string;
       llegada: string | null;
+      ruta?: {
+        id: string;
+        nombre: string;
+        origen: string;
+        destino: string;
+      } | null;
     };
   }>;
 };
@@ -108,6 +142,8 @@ type HorarioSemanalResponse = {
 };
 
 type ReservationDetailsMap = Record<string, ReservationData>;
+type ReservationProfileMap = Record<string, ReservationData>;
+type LocalProfile = { lastName?: string; university?: string };
 
 type HorarioOcupantesResponse = {
   ok: boolean;
@@ -137,6 +173,101 @@ function getReservationDetailsMap(): ReservationDetailsMap {
 
 function saveReservationDetailsMap(map: ReservationDetailsMap) {
   localStorage.setItem(RESERVATION_DETAILS_STORAGE_KEY, JSON.stringify(map));
+}
+
+function getReservationProfile(userId?: string | null): ReservationData | null {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(RESERVATION_PROFILE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const map = JSON.parse(raw) as ReservationProfileMap;
+    return map[userId] || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveReservationProfile(userId: string | null | undefined, profile: ReservationData) {
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const raw = localStorage.getItem(RESERVATION_PROFILE_STORAGE_KEY);
+    const map = raw ? (JSON.parse(raw) as ReservationProfileMap) : {};
+    map[userId] = profile;
+    localStorage.setItem(RESERVATION_PROFILE_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage errors to keep UI usable.
+  }
+}
+
+function getLocalProfileUniversity(userId?: string | null): string | null {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(`${LOCAL_PROFILE_KEY_PREFIX}${userId}`);
+    if (!raw) {
+      return null;
+    }
+
+    const profile = JSON.parse(raw) as LocalProfile;
+    return profile.university || null;
+  } catch {
+    return null;
+  }
+}
+
+function getLocalProfileLastName(userId?: string | null): string | null {
+  if (!userId) {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(`${LOCAL_PROFILE_KEY_PREFIX}${userId}`);
+    if (!raw) {
+      return null;
+    }
+
+    const profile = JSON.parse(raw) as LocalProfile;
+    return profile.lastName || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildFallbackReservationData(
+  direction: "ida" | "vuelta",
+  user: { name?: string | null; phone?: string | null; location?: string | null } | null,
+  profile: ReservationData | null,
+  localUniversity: string | null,
+  localLastName: string | null
+): ReservationData {
+  if (profile) {
+    return profile;
+  }
+
+  const location = user?.location || "No registrado";
+  const university = localUniversity || "UCEVA";
+  const baseName = user?.name || "Estudiante";
+  const fullName = localLastName ? `${baseName} ${localLastName}`.trim() : baseName;
+
+  return {
+    name: fullName,
+    studentId: "No registrado",
+    phone: user?.phone || "No registrado",
+    university,
+    pickupStop: direction === "vuelta" ? FIXED_UCEVA_STOP : location,
+    dropoffStop: direction === "ida" ? FIXED_UCEVA_STOP : location,
+  };
 }
 
 function mapConductorToDriver(
@@ -171,6 +302,37 @@ function mapConductorToDriver(
   };
 }
 
+function formatTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function mapDireccionToDirection(value?: string | null): "ida" | "vuelta" {
+  return String(value || "").toUpperCase() === "VUELTA" ? "vuelta" : "ida";
+}
+
+function getRouteForHorario(
+  horario: { ruta?: { origen: string; destino: string } | null },
+  direction: "ida" | "vuelta"
+) {
+  if (!horario.ruta) {
+    return { origin: "-", destination: "-" };
+  }
+
+  if (direction === "vuelta") {
+    return { origin: horario.ruta.destino, destination: horario.ruta.origen };
+  }
+
+  return { origin: horario.ruta.origen, destination: horario.ruta.destino };
+}
+
 function getScheduleTime(schedule: Pick<Schedule, "arrivalTime" | "departureTime">) {
   return schedule.arrivalTime || schedule.departureTime || "-";
 }
@@ -184,228 +346,8 @@ export function StudentHome() {
     navigate(`/users/${driverId}`);
   };
 
-  const [schedules, setSchedules] = useState<Schedule[]>([
-    {
-      id: "1",
-      direction: "ida",
-      origin: "Buga",
-      destination: "Tuluá",
-      departureTime: "06:30 AM",
-      arrivalTime: "06:30 AM",
-      availableSeats: 15,
-      totalSeats: 40,
-      driver: {
-        id: "d1",
-        name: "Fabian",
-        phone: "300-123-4567",
-        rating: 4.8,
-        experience: "8 años",
-        licensePlate: "ABC-123",
-        verified: true,
-        totalTrips: 1200,
-      },
-    },
-    {
-      id: "2",
-      direction: "ida",
-      origin: "Buga",
-      destination: "Tuluá",
-      departureTime: "07:00 AM",
-      arrivalTime: "07:00 AM",
-      availableSeats: 18,
-      totalSeats: 40,
-      driver: {
-        id: "d2",
-        name: "Jeison Amado",
-        phone: "301-987-6543",
-        rating: 4.9,
-        experience: "10 años",
-        licensePlate: "XYZ-789",
-        verified: true,
-        totalTrips: 1500,
-      },
-    },
-    {
-      id: "3",
-      direction: "ida",
-      origin: "Buga",
-      destination: "Tuluá",
-      departureTime: "08:00 AM",
-      arrivalTime: "08:00 AM",
-      availableSeats: 3,
-      totalSeats: 40,
-      driver: {
-        id: "d2",
-        name: "Jeison Amado",
-        phone: "301-987-6543",
-        rating: 4.9,
-        experience: "10 años",
-        licensePlate: "XYZ-789",
-        verified: true,
-        totalTrips: 1500,
-      },
-    },
-    {
-      id: "4",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "11:00 AM",
-      arrivalTime: "11:00 AM",
-      availableSeats: 25,
-      totalSeats: 40,
-      driver: {
-        id: "d3",
-        name: "Jose",
-        phone: "302-456-7890",
-        rating: 4.7,
-        experience: "6 años",
-        licensePlate: "DEF-456",
-        verified: true,
-        totalTrips: 950,
-      },
-    },
-    {
-      id: "5",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "11:30 AM",
-      arrivalTime: "11:30 AM",
-      availableSeats: 22,
-      totalSeats: 40,
-      driver: {
-        id: "d1",
-        name: "Jose",
-        phone: "300-123-4567",
-        rating: 4.8,
-        experience: "8 años",
-        licensePlate: "ABC-123",
-        verified: true,
-        totalTrips: 1200,
-      },
-    },
-    {
-      id: "6",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "12:20 PM",
-      arrivalTime: "12:20 PM",
-      availableSeats: 16,
-      totalSeats: 40,
-      driver: {
-        id: "d4",
-        name: "Jeison Amado",
-        phone: "303-234-5678",
-        rating: 5.0,
-        experience: "12 años",
-        licensePlate: "GHI-321",
-        verified: true,
-        totalTrips: 2000,
-      },
-    },
-    {
-      id: "7",
-      direction: "ida",
-      origin: "Buga",
-      destination: "Tuluá",
-      departureTime: "01:10 PM",
-      arrivalTime: "01:10 PM",
-      availableSeats: 8,
-      totalSeats: 40,
-      driver: {
-        id: "d1",
-        name: "Jose",
-        phone: "300-123-4567",
-        rating: 4.8,
-        experience: "8 años",
-        licensePlate: "ABC-123",
-        verified: true,
-        totalTrips: 1200,
-      },
-    },
-    {
-      id: "8",
-      direction: "ida",
-      origin: "Buga",
-      destination: "Tuluá",
-      departureTime: "02:00 PM",
-      arrivalTime: "02:00 PM",
-      availableSeats: 11,
-      totalSeats: 40,
-      driver: {
-        id: "d2",
-        name: "Jeison Amado",
-        phone: "301-987-6543",
-        rating: 4.9,
-        experience: "10 años",
-        licensePlate: "XYZ-789",
-        verified: true,
-        totalTrips: 1500,
-      },
-    },
-    {
-      id: "9",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "04:30 PM",
-      arrivalTime: "04:30 PM",
-      availableSeats: 13,
-      totalSeats: 40,
-      driver: {
-        id: "d1",
-        name: "Fabian",
-        phone: "300-123-4567",
-        rating: 4.8,
-        experience: "8 años",
-        licensePlate: "ABC-123",
-        verified: true,
-        totalTrips: 1200,
-      },
-    },
-    {
-      id: "10",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "05:30 PM",
-      arrivalTime: "05:30 PM",
-      availableSeats: 9,
-      totalSeats: 40,
-      driver: {
-        id: "d3",
-        name: "Jose",
-        phone: "302-456-7890",
-        rating: 4.7,
-        experience: "6 años",
-        licensePlate: "DEF-456",
-        verified: true,
-        totalTrips: 950,
-      },
-    },
-    {
-      id: "11",
-      direction: "vuelta",
-      origin: "Tuluá",
-      destination: "Buga",
-      departureTime: "06:10 PM",
-      arrivalTime: "06:10 PM",
-      availableSeats: 0,
-      totalSeats: 40,
-      driver: {
-        id: "d4",
-        name: "Jeison Amado",
-        phone: "303-234-5678",
-        rating: 5.0,
-        experience: "12 años",
-        licensePlate: "GHI-321",
-        verified: true,
-        totalTrips: 2000,
-      },
-    },
-  ]);
+  const [calendarContext, setCalendarContext] = useState<CalendarioResponse["data"] | null>(null);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [weeklySchedule, setWeeklySchedule] = useState<WeeklyScheduleItem[]>([]);
@@ -418,6 +360,22 @@ export function StudentHome() {
   const [occupantsError, setOccupantsError] = useState<string | null>(null);
   const [occupantsSchedule, setOccupantsSchedule] = useState<Schedule | null>(null);
   const [occupants, setOccupants] = useState<Array<{ id: string; name: string }>>([]);
+
+  const fetchCalendarContext = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/calendario/estado`);
+      const result = (await response.json()) as CalendarioResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        return;
+      }
+
+      setCalendarContext(result.data);
+    } catch {
+      // Ignore calendar errors to keep UI usable.
+    }
+  };
+
   const refreshWeeklySchedule = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
@@ -469,33 +427,37 @@ export function StudentHome() {
       const source = schedulesSource || schedules;
       const scheduleMap = new Map(source.map((schedule) => [schedule.id, schedule]));
       const detailsMap = getReservationDetailsMap();
+      const profile = getReservationProfile(user?.id);
+      const localUniversity = getLocalProfileUniversity(user?.id);
+      const localLastName = getLocalProfileLastName(user?.id);
 
       const mappedReservations: Reservation[] = result.data.reduce<Reservation[]>((acc, item) => {
         const schedule = scheduleMap.get(item.horario.id);
-        if (!schedule) {
-          return acc;
-        }
+        const direction = schedule?.direction || mapDireccionToDirection(item.horario.direccion);
+        const routeInfo = schedule
+          ? { origin: schedule.origin, destination: schedule.destination }
+          : getRouteForHorario(item.horario, direction);
 
         const savedDetails = detailsMap[item.id];
+        const fallbackDetails = buildFallbackReservationData(
+          direction,
+          user,
+          profile,
+          localUniversity,
+          localLastName
+        );
 
         acc.push({
           id: item.id,
           scheduleId: item.horario.id,
           weekday: item.diaSemana || null,
-          direction: schedule.direction,
-          origin: schedule.origin,
-          destination: schedule.destination,
-          departureTime: schedule.departureTime,
-          arrivalTime: schedule.arrivalTime,
-          userData: savedDetails || {
-            name: user?.name || "Estudiante",
-            studentId: "No registrado",
-            phone: "No registrado",
-            university: "No registrado",
-            pickupStop: "No registrado",
-            dropoffStop: "No registrado",
-          },
-          driver: schedule.driver,
+          direction,
+          origin: routeInfo.origin,
+          destination: routeInfo.destination,
+          departureTime: schedule?.departureTime || formatTime(item.horario.salida),
+          arrivalTime: schedule?.arrivalTime || formatTime(item.horario.llegada || item.horario.salida),
+          userData: savedDetails || fallbackDetails,
+          driver: schedule?.driver || mapConductorToDriver(null),
           date: new Date(item.createdAt).toLocaleDateString("es-CO"),
         });
 
@@ -508,45 +470,37 @@ export function StudentHome() {
     }
   };
 
-  const refreshScheduleAvailability = async () => {
+  const loadSchedules = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/horarios`);
       const result = (await response.json()) as HorarioOcupacionResponse;
 
       if (!response.ok || !result.ok || !result.data) {
-        return;
+        return null;
       }
 
-      const ocupacionMap = new Map(
-        result.data.map((horario) => [
-          horario.id,
-          {
-            totalSeats: horario.cupoTotal,
-            availableSeats: Math.max(0, horario.cupoTotal - horario.cupoOcupado),
-            driver: mapConductorToDriver(horario.conductor),
-          },
-        ])
-      );
+      const mappedSchedules = result.data.map((horario) => {
+        const direction = mapDireccionToDirection(horario.direccion);
+        const routeInfo = getRouteForHorario({ ruta: horario.ruta || null }, direction);
 
-      const nextSchedules = schedules.map((schedule) => {
-          const ocupacion = ocupacionMap.get(schedule.id);
-          if (!ocupacion) {
-            return schedule;
-          }
-
-          return {
-            ...schedule,
-            totalSeats: ocupacion.totalSeats,
-            availableSeats: ocupacion.availableSeats,
-            driver: ocupacion.driver,
-          };
-
+        return {
+          id: horario.id,
+          direction,
+          origin: routeInfo.origin,
+          destination: routeInfo.destination,
+          departureTime: formatTime(horario.salida),
+          arrivalTime: formatTime(horario.llegada || horario.salida),
+          departureAt: horario.salida,
+          arrivalAt: horario.llegada || null,
+          availableSeats: Math.max(0, horario.cupoTotal - horario.cupoOcupado),
+          totalSeats: horario.cupoTotal,
+          driver: mapConductorToDriver(horario.conductor),
+        } as Schedule;
       });
 
-      setSchedules(nextSchedules);
-      return nextSchedules;
+      setSchedules(mappedSchedules);
+      return mappedSchedules;
     } catch {
-      // Silently ignore refresh errors to keep static UI usable.
       return null;
     }
   };
@@ -555,7 +509,8 @@ export function StudentHome() {
     const loadData = async () => {
       setReservations([]);
       setWeeklySchedule([]);
-      const updatedSchedules = await refreshScheduleAvailability();
+      await fetchCalendarContext();
+      const updatedSchedules = await loadSchedules();
       await refreshMyReservations(updatedSchedules || undefined);
       await refreshWeeklySchedule();
     };
@@ -624,10 +579,23 @@ export function StudentHome() {
 
   const reservedScheduleIds = new Set(reservations.map((reservation) => reservation.scheduleId));
 
-  const idaSchedules = schedules.filter(
+  const sortedSchedules = useMemo(() => {
+    return [...schedules].sort((a, b) => {
+      const aDate = new Date(a.departureAt);
+      const bDate = new Date(b.departureAt);
+      const aMinutes = aDate.getHours() * 60 + aDate.getMinutes();
+      const bMinutes = bDate.getHours() * 60 + bDate.getMinutes();
+      if (aMinutes !== bMinutes) {
+        return aMinutes - bMinutes;
+      }
+      return a.origin.localeCompare(b.origin);
+    });
+  }, [schedules]);
+
+  const idaSchedules = sortedSchedules.filter(
     (schedule) => schedule.direction === "ida" && !reservedScheduleIds.has(schedule.id)
   );
-  const vueltaSchedules = schedules.filter(
+  const vueltaSchedules = sortedSchedules.filter(
     (schedule) => schedule.direction === "vuelta" && !reservedScheduleIds.has(schedule.id)
   );
 
@@ -737,8 +705,9 @@ export function StudentHome() {
       const detailsMap = getReservationDetailsMap();
       detailsMap[result.data.id] = userData;
       saveReservationDetailsMap(detailsMap);
+      saveReservationProfile(user?.id, userData);
 
-      const updatedSchedules = await refreshScheduleAvailability();
+      const updatedSchedules = await loadSchedules();
       await refreshMyReservations(updatedSchedules || undefined);
 
       toast.success("Reserva confirmada", {
@@ -782,7 +751,7 @@ export function StudentHome() {
       delete detailsMap[reservationId];
       saveReservationDetailsMap(detailsMap);
 
-      const updatedSchedules = await refreshScheduleAvailability();
+      const updatedSchedules = await loadSchedules();
       await refreshMyReservations(updatedSchedules || undefined);
 
       toast.success("Reserva cancelada", {
@@ -843,6 +812,24 @@ export function StudentHome() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             Sistema de reserva de cupos para estudiantes
           </p>
+          {calendarContext?.diaLabel ? (
+            <div className="mt-5 flex flex-col items-center gap-1">
+              <span className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                Dia asignado
+              </span>
+              <h2 className="text-3xl font-semibold text-blue-900 dark:text-blue-100">
+                {calendarContext.diaLabel}
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {calendarContext.fechaLabel}
+              </p>
+              {calendarContext.esDiaSiguiente ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Asignaciones aplican al siguiente dia desde las {calendarContext.cutoffHour}:00
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* Main Content */}
@@ -860,12 +847,29 @@ export function StudentHome() {
 
           <TabsContent value="schedules" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                Horarios disponibles - Hoy
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Selecciona un horario de ida o vuelta y completa el formulario para reservar tu cupo.
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Horarios disponibles
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Selecciona un horario de ida o vuelta y completa el formulario para reservar tu cupo.
+                  </p>
+                </div>
+                {calendarContext?.diaLabel ? (
+                  <div className="rounded-lg bg-white/70 dark:bg-gray-900/60 px-3 py-2 text-left md:text-right">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Dia asignado
+                    </p>
+                    <p className="text-2xl font-semibold text-blue-900 dark:text-blue-100">
+                      {calendarContext.diaLabel}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {calendarContext.fechaLabel}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -901,12 +905,29 @@ export function StudentHome() {
 
           <TabsContent value="reservations">
             <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
-                Tus reservas activas
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Aquí puedes ver y gestionar tus reservas confirmadas.
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Tus reservas activas
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Aqui puedes ver y gestionar tus reservas confirmadas.
+                  </p>
+                </div>
+                {calendarContext?.diaLabel ? (
+                  <div className="rounded-lg bg-white/70 dark:bg-gray-900/60 px-3 py-2 text-left md:text-right">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Dia asignado
+                    </p>
+                    <p className="text-2xl font-semibold text-blue-900 dark:text-blue-100">
+                      {calendarContext.diaLabel}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {calendarContext.fechaLabel}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
             <MyReservations
               reservations={reservations}

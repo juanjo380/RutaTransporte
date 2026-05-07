@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { generarCodigoReserva } from "../utils/generarCodigo.js";
+import { getCalendarioContexto, normalizarDireccionApi } from "../utils/calendario.js";
 
 function isUniqueConstraintError(error) {
 	return error?.code === "P2002";
@@ -28,19 +29,6 @@ async function descontarCupoSeguro(tx, horarioId, cantidad = 1) {
 const DIAS_SEMANA = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES"];
 const HORARIOS_IDA_IDS = new Set(["1", "2", "3", "7", "8"]);
 const HORARIOS_VUELTA_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
-
-function getDiaSemanaActual() {
-	const day = new Date().getDay();
-	const map = {
-		1: "LUNES",
-		2: "MARTES",
-		3: "MIERCOLES",
-		4: "JUEVES",
-		5: "VIERNES",
-	};
-
-	return map[day] || null;
-}
 
 function normalizarDia(dia) {
 	if (!dia) {
@@ -87,11 +75,16 @@ function getHorarioMinutes(horario) {
 }
 
 function clasificarDireccionHorario(horario) {
-	if (HORARIOS_IDA_IDS.has(String(horario.id))) {
+	const normalized = normalizarDireccionApi(horario?.direccion);
+	if (normalized) {
+		return normalized;
+	}
+
+	if (HORARIOS_IDA_IDS.has(String(horario?.id))) {
 		return "ida";
 	}
 
-	if (HORARIOS_VUELTA_IDS.has(String(horario.id))) {
+	if (HORARIOS_VUELTA_IDS.has(String(horario?.id))) {
 		return "vuelta";
 	}
 
@@ -213,11 +206,11 @@ async function activarReservaSiDisponible(tx, usuarioId, horarioId, diaSemana) {
 			usuarioId,
 			horarioId,
 			diaSemana,
-			esSemanal: true,
 		},
 		select: {
 			id: true,
 			estado: true,
+			esSemanal: true,
 		},
 	});
 
@@ -229,6 +222,7 @@ async function activarReservaSiDisponible(tx, usuarioId, horarioId, diaSemana) {
 		where: {
 			horarioId,
 			estado: "ACTIVA",
+			OR: [{ diaSemana }, { diaSemana: null }],
 		},
 	});
 
@@ -236,19 +230,14 @@ async function activarReservaSiDisponible(tx, usuarioId, horarioId, diaSemana) {
 		return { ok: false, motivo: "CAPACIDAD_COMPLETA" };
 	}
 
-	const updateCupo = await tx.horario.updateMany({
+	await tx.horario.update({
 		where: {
 			id: horarioId,
-			cupoOcupado: { lt: horario.cupoTotal },
 		},
 		data: {
-			cupoOcupado: { increment: 1 },
+			cupoOcupado: reservasActivas + 1,
 		},
 	});
-
-	if (updateCupo.count === 0) {
-		return { ok: false, motivo: "CAPACIDAD_COMPLETA" };
-	}
 
 	if (reservaExistente) {
 		await tx.reserva.update({
@@ -276,9 +265,33 @@ function keyAsignacion(diaSemana, horarioId) {
 	return `${diaSemana}|${horarioId}`;
 }
 
-async function sincronizarReservasHorarioSemanal(tx, usuarioId, desiredAsignaciones) {
+async function sincronizarReservasParaDia(tx, usuarioId, diaObjetivo, desiredAsignaciones) {
 	const desiredSet = new Set(
 		desiredAsignaciones.map((item) => keyAsignacion(item.dia, item.horarioId))
+	);
+
+	const reservasManuales = await tx.reserva.findMany({
+		where: {
+			usuarioId,
+			estado: "ACTIVA",
+			esSemanal: false,
+			diaSemana: diaObjetivo,
+		},
+		select: {
+			id: true,
+			horarioId: true,
+			horario: {
+				select: {
+					direccion: true,
+				},
+			},
+		},
+	});
+
+	const direccionesManual = new Set(
+		reservasManuales
+			.map((item) => normalizarDireccionApi(item.horario?.direccion))
+			.filter(Boolean)
 	);
 
 	const activas = await tx.reserva.findMany({
@@ -296,7 +309,7 @@ async function sincronizarReservasHorarioSemanal(tx, usuarioId, desiredAsignacio
 
 	const cancelaciones = activas.filter(
 		(reserva) =>
-			!reserva.diaSemana ||
+			reserva.diaSemana !== diaObjetivo ||
 			!desiredSet.has(keyAsignacion(reserva.diaSemana, reserva.horarioId))
 	);
 	if (cancelaciones.length > 0) {
@@ -318,11 +331,14 @@ async function sincronizarReservasHorarioSemanal(tx, usuarioId, desiredAsignacio
 
 	const noAsignadas = [];
 	for (const asignacion of desiredAsignaciones) {
+		if (direccionesManual.has(asignacion.direccion)) {
+			continue;
+		}
 		const result = await activarReservaSiDisponible(
 			tx,
 			usuarioId,
 			asignacion.horarioId,
-			asignacion.dia
+			diaObjetivo
 		);
 		if (!result.ok) {
 			noAsignadas.push({
@@ -426,6 +442,8 @@ export async function crearReserva(req, res) {
 	try {
 		const usuarioId = req.user?.id;
 		const { horarioId } = req.body || {};
+		const contexto = getCalendarioContexto();
+		const diaObjetivo = contexto.diaSemana;
 
 		if (!usuarioId) {
 			return res.status(401).json({
@@ -441,6 +459,14 @@ export async function crearReserva(req, res) {
 			});
 		}
 
+		if (!diaObjetivo) {
+			return res.status(409).json({
+				ok: false,
+				message: "No hay dia habil para asignar la reserva",
+				code: "DIA_NO_DISPONIBLE",
+			});
+		}
+
 		const result = await prisma.$transaction(
 			async (tx) => {
 				const horario = await tx.horario.findUnique({
@@ -450,6 +476,7 @@ export async function crearReserva(req, res) {
 						activo: true,
 						cupoTotal: true,
 						cupoOcupado: true,
+						direccion: true,
 					},
 				});
 
@@ -462,10 +489,129 @@ export async function crearReserva(req, res) {
 					};
 				}
 
+				const reservaExacta = await tx.reserva.findFirst({
+					where: {
+						usuarioId,
+						horarioId,
+						diaSemana: diaObjetivo,
+					},
+					select: {
+						id: true,
+						codigo: true,
+						estado: true,
+						horarioId: true,
+						usuarioId: true,
+						createdAt: true,
+					},
+				});
+
+				const reservaNula = reservaExacta
+					? null
+					: await tx.reserva.findFirst({
+							where: {
+								usuarioId,
+								horarioId,
+								diaSemana: null,
+							},
+							select: {
+								id: true,
+								codigo: true,
+								estado: true,
+								horarioId: true,
+								usuarioId: true,
+								createdAt: true,
+							},
+						});
+
+				const reservaExistente = reservaExacta || reservaNula;
+				const direccion = normalizarDireccionApi(horario.direccion);
+				if (!direccion) {
+					return {
+						error: {
+							status: 409,
+							message: "El horario no tiene direccion valida",
+							code: "DIRECCION_INVALIDA",
+						},
+					};
+				}
+
+				const limpiarReservas = async () => {
+					const reservasParaLimpiar = await tx.reserva.findMany({
+						where: {
+							usuarioId,
+							estado: "ACTIVA",
+							OR: [{ diaSemana: diaObjetivo }, { diaSemana: null }],
+							horarioId: { not: horarioId },
+							horario: {
+								direccion: horario.direccion,
+							},
+						},
+						select: {
+							id: true,
+							horarioId: true,
+						},
+					});
+
+					if (reservasParaLimpiar.length === 0) {
+						return;
+					}
+
+					await tx.reserva.updateMany({
+						where: { id: { in: reservasParaLimpiar.map((item) => item.id) } },
+						data: { estado: "CANCELADA" },
+					});
+
+					const porHorario = new Map();
+					for (const item of reservasParaLimpiar) {
+						const current = porHorario.get(item.horarioId) || 0;
+						porHorario.set(item.horarioId, current + 1);
+					}
+
+					for (const [limpiarHorarioId, cantidad] of porHorario.entries()) {
+						await descontarCupoSeguro(tx, limpiarHorarioId, cantidad);
+					}
+				};
+
+				if (reservaExistente?.estado === "ACTIVA") {
+					await limpiarReservas();
+					const reservasActivas = await tx.reserva.count({
+						where: {
+							horarioId,
+							estado: "ACTIVA",
+							OR: [{ diaSemana: diaObjetivo }, { diaSemana: null }],
+						},
+					});
+
+					const reservaActualizada = await tx.reserva.update({
+						where: { id: reservaExistente.id },
+						data: {
+							diaSemana: diaObjetivo,
+							esSemanal: false,
+						},
+					});
+
+					return {
+						data: {
+							id: reservaActualizada.id,
+							codigo: reservaActualizada.codigo,
+							horarioId: reservaActualizada.horarioId,
+							usuarioId: reservaActualizada.usuarioId,
+							estado: reservaActualizada.estado,
+							createdAt: reservaActualizada.createdAt,
+							diaSemana: reservaActualizada.diaSemana,
+							cupo: {
+								reservasActivas,
+								cupoTotal: horario.cupoTotal,
+							},
+						},
+					};
+				}
+
 				const reservasActivas = await tx.reserva.count({
 					where: {
 						horarioId,
 						estado: "ACTIVA",
+						OR: [{ diaSemana: diaObjetivo }, { diaSemana: null }],
 					},
 				});
 
@@ -484,39 +630,14 @@ export async function crearReserva(req, res) {
 					};
 				}
 
-				const reservaExistente = await tx.reserva.findFirst({
-					where: {
-						usuarioId,
-						horarioId,
-						diaSemana: null,
-						esSemanal: false,
-					},
-					select: {
-						id: true,
-						codigo: true,
-						estado: true,
-						horarioId: true,
-						usuarioId: true,
-						createdAt: true,
-					},
-				});
-
-				if (reservaExistente?.estado === "ACTIVA") {
-					return {
-						error: {
-							status: 409,
-							message: "Ya tienes una reserva activa para este horario",
-							code: "RESERVA_DUPLICADA",
-						},
-					};
-				}
+				await limpiarReservas();
 
 				const reserva = reservaExistente
 					? await tx.reserva.update({
 							where: { id: reservaExistente.id },
 							data: {
 								estado: "ACTIVA",
-								diaSemana: null,
+								diaSemana: diaObjetivo,
 								esSemanal: false,
 							},
 						})
@@ -524,26 +645,21 @@ export async function crearReserva(req, res) {
 							data: {
 								usuarioId,
 								horarioId,
-								diaSemana: null,
+								diaSemana: diaObjetivo,
 								esSemanal: false,
 								codigo: generarCodigoReserva(),
 								estado: "ACTIVA",
 							},
 						});
 
-				const horarioActualizado = await tx.horario.updateMany({
+				await tx.horario.update({
 					where: {
 						id: horarioId,
-						cupoOcupado: { lt: horario.cupoTotal },
 					},
 					data: {
-						cupoOcupado: { increment: 1 },
+						cupoOcupado: reservasActivas + 1,
 					},
 				});
-
-				if (horarioActualizado.count === 0) {
-					throw new Error("CAPACIDAD_COMPLETA_RACE");
-				}
 
 				return {
 					data: {
@@ -553,6 +669,7 @@ export async function crearReserva(req, res) {
 						usuarioId: reserva.usuarioId,
 						estado: reserva.estado,
 						createdAt: reserva.createdAt,
+						diaSemana: reserva.diaSemana,
 						cupo: {
 							reservasActivas: reservasActivas + 1,
 							cupoTotal: horario.cupoTotal,
@@ -583,14 +700,6 @@ export async function crearReserva(req, res) {
 				ok: false,
 				message: "Ya existe una reserva para este usuario en el horario seleccionado",
 				code: "RESERVA_DUPLICADA",
-			});
-		}
-
-		if (error.message === "CAPACIDAD_COMPLETA_RACE") {
-			return res.status(409).json({
-				ok: false,
-				message: "Alerta: capacidad completa, no se pudo registrar la reserva",
-				code: "CAPACIDAD_COMPLETA",
 			});
 		}
 
@@ -792,11 +901,18 @@ export async function listarReservasAdmin(req, res) {
 		const estadoFilter = ["ACTIVA", "CANCELADA", "COMPLETADA"].includes(estado)
 			? estado
 			: "ACTIVA";
+		const contexto = getCalendarioContexto();
+		const where = {
+			estado: estadoFilter,
+			...(contexto.diaSemana
+				? {
+						OR: [{ diaSemana: contexto.diaSemana }, { diaSemana: null }],
+				  }
+				: {}),
+		};
 
 		const reservas = await prisma.reserva.findMany({
-			where: {
-				estado: estadoFilter,
-			},
+			where,
 			orderBy: {
 				createdAt: "desc",
 			},
@@ -848,10 +964,44 @@ export async function listarMisReservas(req, res) {
 			});
 		}
 
+		const contexto = getCalendarioContexto();
+		if (contexto.diaSemana) {
+			await prisma.$transaction(async (tx) => {
+				const horarios = await tx.horarioSemanalEstudiante.findMany({
+					where: { usuarioId },
+					orderBy: { dia: "asc" },
+					select: {
+						dia: true,
+						viaja: true,
+						primeraEntrada: true,
+						ultimaSalida: true,
+					},
+				});
+
+				const horariosActivos = await tx.horario.findMany({
+					where: { activo: true },
+					select: { id: true, salida: true, direccion: true },
+				});
+
+				const asignaciones = construirAsignaciones(horarios, horariosActivos);
+				const asignacionesObjetivo = asignaciones.desiredAsignaciones.filter(
+					(item) => item.dia === contexto.diaSemana
+				);
+
+				await sincronizarReservasParaDia(
+					tx,
+					usuarioId,
+					contexto.diaSemana,
+					asignacionesObjetivo
+				);
+			});
+		}
+
 		const reservas = await prisma.reserva.findMany({
 			where: {
 				usuarioId,
 				estado: "ACTIVA",
+				OR: [{ diaSemana: contexto.diaSemana }, { diaSemana: null }],
 			},
 			orderBy: {
 				createdAt: "desc",
@@ -866,8 +1016,17 @@ export async function listarMisReservas(req, res) {
 				horario: {
 					select: {
 						id: true,
+						direccion: true,
 						salida: true,
 						llegada: true,
+						ruta: {
+							select: {
+								id: true,
+								nombre: true,
+								origen: true,
+								destino: true,
+							},
+						},
 					},
 				},
 			},
@@ -876,6 +1035,12 @@ export async function listarMisReservas(req, res) {
 		return res.status(200).json({
 			ok: true,
 			data: reservas,
+			meta: {
+				diaAplicado: contexto.diaSemana,
+				fechaAplicada: contexto.fechaIso,
+				fechaLabel: contexto.fechaLabel,
+				esDiaSiguiente: contexto.esDiaSiguiente,
+			},
 		});
 	} catch (error) {
 		return res.status(500).json({
@@ -910,14 +1075,33 @@ export async function listarHorarioSemanalEstudiante(req, res) {
 
 		const horariosActivos = await prisma.horario.findMany({
 			where: { activo: true },
-			select: { id: true, salida: true },
+			select: { id: true, salida: true, direccion: true },
 		});
 
 		const asignaciones = construirAsignaciones(horarios, horariosActivos);
+		const contexto = getCalendarioContexto();
+		const asignacionesObjetivo = contexto.diaSemana
+			? asignaciones.desiredAsignaciones.filter((item) => item.dia === contexto.diaSemana)
+			: [];
+
+		let reservasNoAsignadas = [];
+		if (contexto.diaSemana) {
+			const syncResult = await prisma.$transaction(async (tx) =>
+				sincronizarReservasParaDia(tx, usuarioId, contexto.diaSemana, asignacionesObjetivo)
+			);
+			reservasNoAsignadas = syncResult.noAsignadas || [];
+		}
 
 		return res.status(200).json({
 			ok: true,
 			data: asignaciones.dias,
+			meta: {
+				diaAplicado: contexto.diaSemana,
+				fechaAplicada: contexto.fechaIso,
+				fechaLabel: contexto.fechaLabel,
+				esDiaSiguiente: contexto.esDiaSiguiente,
+				reservasNoAsignadas,
+			},
 		});
 	} catch (error) {
 		return res.status(500).json({
@@ -952,13 +1136,13 @@ export async function guardarHorarioSemanalEstudiante(req, res) {
 
 		const horariosActivos = await prisma.horario.findMany({
 			where: { activo: true },
-			select: { id: true, salida: true },
+			select: { id: true, salida: true, direccion: true },
 		});
 
 		const asignaciones = construirAsignaciones(horariosNormalizados, horariosActivos);
-		const diaActual = getDiaSemanaActual();
-		const asignacionesHoy = diaActual
-			? asignaciones.desiredAsignaciones.filter((item) => item.dia === diaActual)
+		const contexto = getCalendarioContexto();
+		const asignacionesObjetivo = contexto.diaSemana
+			? asignaciones.desiredAsignaciones.filter((item) => item.dia === contexto.diaSemana)
 			: [];
 
 		if (
@@ -988,10 +1172,15 @@ export async function guardarHorarioSemanalEstudiante(req, res) {
 				})),
 			});
 
-			return sincronizarReservasHorarioSemanal(
+			if (!contexto.diaSemana) {
+				return { noAsignadas: [] };
+			}
+
+			return sincronizarReservasParaDia(
 				tx,
 				usuarioId,
-				asignacionesHoy
+				contexto.diaSemana,
+				asignacionesObjetivo
 			);
 		});
 
@@ -1013,8 +1202,10 @@ export async function guardarHorarioSemanalEstudiante(req, res) {
 			message: "Horario semanal guardado correctamente",
 			data: asignacionesGuardadas.dias,
 			meta: {
-				diaAplicado: diaActual,
-				reservasEsperadasHoy: asignacionesHoy.length,
+				diaAplicado: contexto.diaSemana,
+				fechaAplicada: contexto.fechaIso,
+				fechaLabel: contexto.fechaLabel,
+				reservasEsperadasHoy: asignacionesObjetivo.length,
 				reservasNoAsignadas: syncResult.noAsignadas,
 			},
 		});
