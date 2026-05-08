@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { useTheme } from "../context/theme-context";
 import {
   Bus,
+  Calendar,
   LogOut,
   User,
   Clock,
@@ -36,8 +37,11 @@ const TOKEN_STORAGE_KEY = "ruta_transporte_token";
 
 type Schedule = {
   id: string;
+  direction: "ida" | "vuelta";
   departureTime: string;
   arrivalTime: string;
+  departureAt: string;
+  arrivalAt: string | null;
   cupoTotal: number;
   cupoOcupado: number;
   route: {
@@ -107,6 +111,7 @@ type HorariosResponse = {
   message?: string;
   data?: Array<{
     id: string;
+    direccion?: "IDA" | "VUELTA" | null;
     salida: string;
     llegada: string | null;
     cupoTotal: number;
@@ -123,6 +128,33 @@ type HorariosResponse = {
       email: string;
     } | null;
   }>;
+};
+
+type Ruta = {
+  id: string;
+  nombre: string;
+  origen: string;
+  destino: string;
+  activa: boolean;
+};
+
+type RutasResponse = {
+  ok: boolean;
+  message?: string;
+  data?: Ruta[];
+};
+
+type CalendarioResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    diaSemana: "LUNES" | "MARTES" | "MIERCOLES" | "JUEVES" | "VIERNES" | null;
+    diaLabel: string | null;
+    fechaIso: string;
+    fechaLabel: string;
+    esDiaSiguiente: boolean;
+    cutoffHour: number;
+  };
 };
 
 type ConductoresDisponiblesResponse = {
@@ -146,7 +178,9 @@ function formatTime(value: string | null | undefined) {
   });
 }
 
-const VUELTA_SCHEDULE_IDS = new Set(["4", "5", "6", "9", "10", "11"]);
+function mapDireccionToDirection(value?: string | null): "ida" | "vuelta" {
+  return String(value || "").toUpperCase() === "VUELTA" ? "vuelta" : "ida";
+}
 
 function getScheduleTime(schedule: Pick<Schedule, "arrivalTime" | "departureTime"> | null | undefined) {
   if (!schedule) {
@@ -156,20 +190,26 @@ function getScheduleTime(schedule: Pick<Schedule, "arrivalTime" | "departureTime
   return schedule.arrivalTime || schedule.departureTime || "-";
 }
 
-function getScheduleRoute(schedule: Pick<Schedule, "id" | "route">) {
+function getScheduleRoute(schedule: Pick<Schedule, "route" | "direction">) {
   if (!schedule.route) {
     return null;
   }
-
-  const isVuelta = VUELTA_SCHEDULE_IDS.has(schedule.id);
-  const origin = isVuelta ? schedule.route.destino : schedule.route.origen;
-  const destination = isVuelta ? schedule.route.origen : schedule.route.destino;
+  const direction = schedule.direction || "ida";
+  const origin = direction === "vuelta" ? schedule.route.destino : schedule.route.origen;
+  const destination = direction === "vuelta" ? schedule.route.origen : schedule.route.destino;
 
   return {
     origin,
     destination,
     name: `${origin} - ${destination}`,
   };
+}
+
+function getRouteLabelForDirection(route: Ruta, direction: "IDA" | "VUELTA") {
+  const isVuelta = direction === "VUELTA";
+  const origin = isVuelta ? route.destino : route.origen;
+  const destination = isVuelta ? route.origen : route.destino;
+  return `${route.nombre} (${origin} -> ${destination})`;
 }
 
 function mapReservationStatusLabel(status: string) {
@@ -205,6 +245,14 @@ export function AdminDashboard() {
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [calendarContext, setCalendarContext] = useState<CalendarioResponse["data"] | null>(null);
+  const [routes, setRoutes] = useState<Ruta[]>([]);
+  const [newScheduleRouteId, setNewScheduleRouteId] = useState("");
+  const [newScheduleDirection, setNewScheduleDirection] = useState<"IDA" | "VUELTA">("IDA");
+  const [newScheduleHoraSalida, setNewScheduleHoraSalida] = useState("");
+  const [newScheduleHoraLlegada, setNewScheduleHoraLlegada] = useState("");
+  const [newScheduleCupoTotal, setNewScheduleCupoTotal] = useState("40");
+  const [isCreatingSchedule, setIsCreatingSchedule] = useState(false);
   const [availableDriversBySchedule, setAvailableDriversBySchedule] = useState<Record<string, DriverAvailability[]>>({});
   const [selectedDriverBySchedule, setSelectedDriverBySchedule] = useState<Record<string, string>>({});
   const [emailToCancel, setEmailToCancel] = useState("");
@@ -217,6 +265,41 @@ export function AdminDashboard() {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationScheduleId, setNotificationScheduleId] = useState("");
   const [isSendingNotification, setIsSendingNotification] = useState(false);
+  const [isDeletingScheduleId, setIsDeletingScheduleId] = useState<string | null>(null);
+
+  const fetchCalendarContext = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/calendario/estado`);
+      const result = (await response.json()) as CalendarioResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        return;
+      }
+
+      setCalendarContext(result.data);
+    } catch {
+      // Ignore calendar errors to keep UI usable.
+    }
+  };
+
+  const fetchRoutes = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/rutas?activas=true`);
+      const result = (await response.json()) as RutasResponse;
+
+      if (!response.ok || !result.ok || !result.data) {
+        setRoutes([]);
+        return;
+      }
+
+      setRoutes(result.data);
+      if (!newScheduleRouteId && result.data.length > 0) {
+        setNewScheduleRouteId(result.data[0].id);
+      }
+    } catch {
+      setRoutes([]);
+    }
+  };
 
   const fetchDashboardData = async () => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -274,8 +357,11 @@ export function AdminDashboard() {
       } else {
         const mappedSchedules = (horariosJson.data || []).map((horario) => ({
           id: horario.id,
+          direction: mapDireccionToDirection(horario.direccion),
           departureTime: formatTime(horario.salida),
           arrivalTime: formatTime(horario.llegada || horario.salida),
+          departureAt: horario.salida,
+          arrivalAt: horario.llegada || null,
           cupoTotal: horario.cupoTotal,
           cupoOcupado: horario.cupoOcupado,
           route: horario.ruta || null,
@@ -322,9 +408,79 @@ export function AdminDashboard() {
     }
   };
 
+  const handleCreateSchedule = async () => {
+    if (!newScheduleRouteId) {
+      toast.error("Ruta requerida", {
+        description: "Selecciona una ruta para crear el horario.",
+      });
+      return;
+    }
+
+    if (!newScheduleHoraSalida) {
+      toast.error("Hora de salida requerida", {
+        description: "Debes indicar la hora de salida.",
+      });
+      return;
+    }
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setIsCreatingSchedule(true);
+    try {
+      const payload = {
+        rutaId: newScheduleRouteId,
+        direccion: newScheduleDirection,
+        horaSalida: newScheduleHoraSalida,
+        horaLlegada: newScheduleHoraLlegada || null,
+        cupoTotal: Number(newScheduleCupoTotal || 0),
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/horarios/admin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as { ok: boolean; message?: string };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo crear el horario", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Horario creado", {
+        description: "El horario fue registrado correctamente.",
+      });
+      setNewScheduleHoraSalida("");
+      setNewScheduleHoraLlegada("");
+      setNewScheduleCupoTotal("40");
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible crear el horario.",
+      });
+    } finally {
+      setIsCreatingSchedule(false);
+    }
+  };
+
   useEffect(() => {
     void fetchDashboardData();
   }, [reservationStatusFilter]);
+
+  useEffect(() => {
+    void fetchCalendarContext();
+    void fetchRoutes();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -368,6 +524,70 @@ export function AdminDashboard() {
       setIsSubmitting(false);
     }
   };
+
+  const handleDeleteSchedule = async (scheduleId: string) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    const confirmed = window.confirm("Eliminar este horario? Esta accion lo desactiva.");
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingScheduleId(scheduleId);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/horarios/admin/${scheduleId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = (await response.json()) as { ok: boolean; message?: string };
+
+      if (!response.ok || !result.ok) {
+        toast.error("No se pudo eliminar el horario", {
+          description: result.message || "Intenta nuevamente",
+        });
+        return;
+      }
+
+      toast.success("Horario eliminado", {
+        description: "El horario fue desactivado correctamente.",
+      });
+
+      await fetchDashboardData();
+    } catch {
+      toast.error("Error de conexion", {
+        description: "No fue posible eliminar el horario.",
+      });
+    } finally {
+      setIsDeletingScheduleId(null);
+    }
+  };
+
+  const sortedSchedules = useMemo(() => {
+    return [...schedules].sort((a, b) => {
+      const aDate = new Date(a.departureAt);
+      const bDate = new Date(b.departureAt);
+      const aMinutes = aDate.getHours() * 60 + aDate.getMinutes();
+      const bMinutes = bDate.getHours() * 60 + bDate.getMinutes();
+      if (aMinutes !== bMinutes) {
+        return aMinutes - bMinutes;
+      }
+      if (a.direction !== b.direction) {
+        return a.direction === "ida" ? -1 : 1;
+      }
+      const aRoute = getScheduleRoute(a)?.name || "";
+      const bRoute = getScheduleRoute(b)?.name || "";
+      return aRoute.localeCompare(bRoute);
+    });
+  }, [schedules]);
 
   const handleCancelByEmail = async () => {
     const email = emailToCancel.trim().toLowerCase();
@@ -535,7 +755,7 @@ export function AdminDashboard() {
     }
   };
 
-  const scheduleMatrix = schedules.map((schedule) => {
+  const scheduleMatrix = sortedSchedules.map((schedule) => {
     const studentsInSchedule = reservations.filter((reservation) => reservation.scheduleId === schedule.id);
 
     return {
@@ -545,7 +765,7 @@ export function AdminDashboard() {
     };
   });
 
-  const occupancyRows = schedules
+  const occupancyRows = sortedSchedules
     .filter((schedule) => occupancyScheduleFilter === "all" || schedule.id === occupancyScheduleFilter)
     .map((schedule) => {
       const occupiedSeats = Math.max(0, schedule.cupoOcupado);
@@ -682,6 +902,24 @@ export function AdminDashboard() {
                 Salir
               </Button>
             </div>
+            {calendarContext?.diaLabel ? (
+              <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3">
+                <div className="bg-purple-600 p-2 rounded-lg">
+                  <Calendar className="size-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                    Dia asignado
+                  </p>
+                  <p className="text-xl font-semibold text-purple-900 dark:text-purple-200">
+                    {calendarContext.diaLabel}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {calendarContext.fechaLabel}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -749,10 +987,27 @@ export function AdminDashboard() {
 
           <TabsContent value="matrix" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">Matriz de rutas del día</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Visualización completa de todos los horarios, conductores asignados y estudiantes
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 mb-2">Matriz de rutas</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Visualizacion completa de todos los horarios, conductores asignados y estudiantes
+                  </p>
+                </div>
+                {calendarContext?.diaLabel ? (
+                  <div className="rounded-lg bg-white/70 dark:bg-gray-900/60 px-3 py-2 text-left md:text-right">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Dia asignado
+                    </p>
+                    <p className="text-2xl font-semibold text-purple-900 dark:text-purple-200">
+                      {calendarContext.diaLabel}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {calendarContext.fechaLabel}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -858,8 +1113,27 @@ export function AdminDashboard() {
 
           <TabsContent value="quick" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">Vista rápida de ocupación</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Resumen compacto de cuántos estudiantes hay en cada horario</p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 mb-2">Vista rapida de ocupacion</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Resumen compacto de cuantos estudiantes hay en cada horario
+                  </p>
+                </div>
+                {calendarContext?.diaLabel ? (
+                  <div className="rounded-lg bg-white/70 dark:bg-gray-900/60 px-3 py-2 text-left md:text-right">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Dia asignado
+                    </p>
+                    <p className="text-2xl font-semibold text-purple-900 dark:text-purple-200">
+                      {calendarContext.diaLabel}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {calendarContext.fechaLabel}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
               <div className="mt-3 max-w-xs">
                 <Select
                   value={reservationStatusFilter}
@@ -903,7 +1177,7 @@ export function AdminDashboard() {
                         Sin horarios disponibles
                       </SelectItem>
                     ) : (
-                      schedules.map((schedule) => (
+                      sortedSchedules.map((schedule) => (
                         <SelectItem key={schedule.id} value={schedule.id}>
                           {getScheduleTime(schedule)}
                           {getScheduleRoute(schedule)
@@ -944,7 +1218,7 @@ export function AdminDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos los horarios</SelectItem>
-                      {schedules.map((schedule) => (
+                      {sortedSchedules.map((schedule) => (
                         <SelectItem key={schedule.id} value={schedule.id}>
                           {getScheduleTime(schedule)}
                         </SelectItem>
@@ -1071,13 +1345,15 @@ export function AdminDashboard() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Total de estudiantes transportados hoy</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      Total de estudiantes transportados {calendarContext?.diaLabel ? `- ${calendarContext.diaLabel}` : ""}
+                    </p>
                     <p className="text-3xl font-bold text-purple-900 dark:text-purple-200">{totalReservations}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600 dark:text-gray-300">Rutas con conductor asignado</p>
                     <p className="text-3xl font-bold text-green-700">
-                      {scheduleMatrix.filter((item) => item.driver).length}/{schedules.length}
+                      {scheduleMatrix.filter((item) => item.driver).length}/{sortedSchedules.length}
                     </p>
                   </div>
                 </div>
@@ -1087,11 +1363,110 @@ export function AdminDashboard() {
 
           <TabsContent value="assign" className="space-y-4">
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <h2 className="font-semibold text-gray-800 mb-2">Asignar conductores a rutas</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Se muestran solo conductores disponibles por horario. La asignación solicita confirmación.
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 mb-2">Asignar conductores a rutas</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Se muestran solo conductores disponibles por horario. La asignacion solicita confirmacion.
+                  </p>
+                </div>
+                {calendarContext?.diaLabel ? (
+                  <div className="rounded-lg bg-white/70 dark:bg-gray-900/60 px-3 py-2 text-left md:text-right">
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                      Dia asignado
+                    </p>
+                    <p className="text-2xl font-semibold text-purple-900 dark:text-purple-200">
+                      {calendarContext.diaLabel}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {calendarContext.fechaLabel}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
+
+            <Card className="bg-white/70 dark:bg-gray-900/60">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="size-5 text-purple-600" />
+                  Crear nuevo horario
+                </CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Registra horarios adicionales para rutas con alta demanda.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Ruta</label>
+                    <Select value={newScheduleRouteId} onValueChange={setNewScheduleRouteId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una ruta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {routes.length === 0 ? (
+                          <SelectItem value="" disabled>
+                            Sin rutas disponibles
+                          </SelectItem>
+                        ) : (
+                          routes.map((route) => (
+                            <SelectItem key={route.id} value={route.id}>
+                              {getRouteLabelForDirection(route, newScheduleDirection)}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Direccion</label>
+                    <Select value={newScheduleDirection} onValueChange={(value) => setNewScheduleDirection(value as "IDA" | "VUELTA")}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="IDA">Ida</SelectItem>
+                        <SelectItem value="VUELTA">Vuelta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Hora salida</label>
+                    <Input
+                      type="time"
+                      value={newScheduleHoraSalida}
+                      onChange={(event) => setNewScheduleHoraSalida(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Hora llegada (opcional)</label>
+                    <Input
+                      type="time"
+                      value={newScheduleHoraLlegada}
+                      onChange={(event) => setNewScheduleHoraLlegada(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Cupo total</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={newScheduleCupoTotal}
+                      onChange={(event) => setNewScheduleCupoTotal(event.target.value)}
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex items-end justify-end">
+                    <Button onClick={handleCreateSchedule} disabled={isCreatingSchedule}>
+                      {isCreatingSchedule ? "Creando..." : "Crear horario"}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-gray-900 dark:to-gray-800">
               <CardHeader>
@@ -1117,7 +1492,7 @@ export function AdminDashboard() {
             </Card>
 
             <div className="space-y-3">
-              {schedules.map((schedule) => {
+              {sortedSchedules.map((schedule) => {
                 const driversForSchedule = availableDriversBySchedule[schedule.id] || [];
                 const selectableDrivers = driversForSchedule.filter(
                   (driver) => driver.disponible || driver.id === schedule.driverId
@@ -1135,6 +1510,17 @@ export function AdminDashboard() {
                           <Badge variant="secondary">{selectableDrivers.length} disponibles</Badge>
                           {schedule.driver && <Badge className="bg-green-600">Asignado</Badge>}
                         </div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
+                        <span>{getScheduleRoute(schedule)?.name || "Ruta sin informacion"}</span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={isDeletingScheduleId === schedule.id}
+                          onClick={() => handleDeleteSchedule(schedule.id)}
+                        >
+                          {isDeletingScheduleId === schedule.id ? "Eliminando..." : "Eliminar"}
+                        </Button>
                       </div>
                     </CardHeader>
                     <CardContent>

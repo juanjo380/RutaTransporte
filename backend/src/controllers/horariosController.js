@@ -1,4 +1,35 @@
 import { prisma } from "../lib/prisma.js";
+import { getCalendarioContexto } from "../utils/calendario.js";
+
+function parseHora24(hora) {
+	if (typeof hora !== "string") {
+		return null;
+	}
+
+	const valor = hora.trim();
+	if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(valor)) {
+		return null;
+	}
+
+	return valor;
+}
+
+function buildDateAtTime(time) {
+	const now = new Date();
+	const [hours, minutes] = time.split(":").map(Number);
+	const result = new Date(now);
+	result.setHours(hours, minutes, 0, 0);
+	return result;
+}
+
+function normalizarDireccion(direccion) {
+	const value = String(direccion || "").trim().toUpperCase();
+	if (value === "IDA" || value === "VUELTA") {
+		return value;
+	}
+
+	return null;
+}
 
 function getHorarioRange(horario) {
 	const start = new Date(horario.salida);
@@ -23,10 +54,10 @@ export async function listarHorarios(req, res) {
 			orderBy: { salida: "asc" },
 			select: {
 				id: true,
+				direccion: true,
 				salida: true,
 				llegada: true,
 				cupoTotal: true,
-				cupoOcupado: true,
 				ruta: {
 					select: {
 						id: true,
@@ -45,9 +76,33 @@ export async function listarHorarios(req, res) {
 			},
 		});
 
+		const contexto = getCalendarioContexto();
+		const ocupaciones = await prisma.reserva.groupBy({
+			by: ["horarioId"],
+			where: {
+				estado: "ACTIVA",
+				OR: [
+					{ diaSemana: contexto.diaSemana },
+					{ diaSemana: null },
+				],
+			},
+			_count: {
+				_all: true,
+			},
+		});
+
+		const ocupacionMap = new Map(
+			ocupaciones.map((item) => [item.horarioId, item._count._all])
+		);
+
+		const horariosConCupo = horarios.map((horario) => ({
+			...horario,
+			cupoOcupado: ocupacionMap.get(horario.id) || 0,
+		}));
+
 		return res.status(200).json({
 			ok: true,
-			data: horarios,
+			data: horariosConCupo,
 		});
 	} catch (error) {
 		return res.status(500).json({
@@ -246,6 +301,156 @@ export async function asignarConductorHorario(req, res) {
 	}
 }
 
+export async function crearHorarioAdmin(req, res) {
+	try {
+		const { rutaId, direccion, horaSalida, horaLlegada, cupoTotal } = req.body || {};
+
+		if (!rutaId) {
+			return res.status(400).json({
+				ok: false,
+				message: "rutaId es obligatorio",
+			});
+		}
+
+		const direccionNormalizada = normalizarDireccion(direccion);
+		if (!direccionNormalizada) {
+			return res.status(400).json({
+				ok: false,
+				message: "direccion invalida. Usa IDA o VUELTA",
+			});
+		}
+
+		const salidaValidada = parseHora24(horaSalida);
+		if (!salidaValidada) {
+			return res.status(400).json({
+				ok: false,
+				message: "horaSalida invalida. Usa HH:MM en 24 horas",
+			});
+		}
+
+		const llegadaValidada = horaLlegada ? parseHora24(horaLlegada) : null;
+		if (horaLlegada && !llegadaValidada) {
+			return res.status(400).json({
+				ok: false,
+				message: "horaLlegada invalida. Usa HH:MM en 24 horas",
+			});
+		}
+
+		const cupo = Number(cupoTotal);
+		if (!Number.isFinite(cupo) || cupo <= 0) {
+			return res.status(400).json({
+				ok: false,
+				message: "cupoTotal debe ser mayor a 0",
+			});
+		}
+
+		const ruta = await prisma.ruta.findUnique({
+			where: { id: String(rutaId) },
+			select: { id: true, activa: true },
+		});
+
+		if (!ruta || !ruta.activa) {
+			return res.status(404).json({
+				ok: false,
+				message: "Ruta no encontrada o inactiva",
+			});
+		}
+
+		const salida = buildDateAtTime(salidaValidada);
+		const llegada = llegadaValidada ? buildDateAtTime(llegadaValidada) : salida;
+
+		const horario = await prisma.horario.create({
+			data: {
+				rutaId: ruta.id,
+				direccion: direccionNormalizada,
+				salida,
+				llegada,
+				cupoTotal: cupo,
+				cupoOcupado: 0,
+				activo: true,
+			},
+			select: {
+				id: true,
+				direccion: true,
+				salida: true,
+				llegada: true,
+				cupoTotal: true,
+				cupoOcupado: true,
+			},
+		});
+
+		return res.status(201).json({
+			ok: true,
+			message: "Horario creado",
+			data: horario,
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al crear horario",
+			error: error.message,
+		});
+	}
+}
+
+export async function eliminarHorarioAdmin(req, res) {
+	try {
+		const horarioId = String(req.params?.horarioId || "");
+
+		if (!horarioId) {
+			return res.status(400).json({
+				ok: false,
+				message: "horarioId es obligatorio",
+			});
+		}
+
+		const horario = await prisma.horario.findUnique({
+			where: { id: horarioId },
+			select: { id: true, activo: true },
+		});
+
+		if (!horario || !horario.activo) {
+			return res.status(404).json({
+				ok: false,
+				message: "Horario no encontrado",
+			});
+		}
+
+		const reservasActivas = await prisma.reserva.count({
+			where: {
+				horarioId,
+				estado: "ACTIVA",
+			},
+		});
+
+		if (reservasActivas > 0) {
+			return res.status(409).json({
+				ok: false,
+				message: "No se puede eliminar el horario con reservas activas",
+			});
+		}
+
+		await prisma.horario.update({
+			where: { id: horarioId },
+			data: {
+				activo: false,
+				conductorId: null,
+			},
+		});
+
+		return res.status(200).json({
+			ok: true,
+			message: "Horario eliminado",
+		});
+	} catch (error) {
+		return res.status(500).json({
+			ok: false,
+			message: "Error al eliminar horario",
+			error: error.message,
+		});
+	}
+}
+
 export async function desasignarConductorHorario(req, res) {
 	try {
 		const { horarioId } = req.body || {};
@@ -341,6 +546,8 @@ export async function listarHorariosConductor(req, res) {
 			});
 		}
 
+		const contexto = getCalendarioContexto();
+
 		const horarios = await prisma.horario.findMany({
 			where: {
 				activo: true,
@@ -351,6 +558,7 @@ export async function listarHorariosConductor(req, res) {
 			},
 			select: {
 				id: true,
+				direccion: true,
 				salida: true,
 				llegada: true,
 				ruta: {
@@ -363,6 +571,10 @@ export async function listarHorariosConductor(req, res) {
 				reservas: {
 					where: {
 						estado: "ACTIVA",
+						OR: [
+							{ diaSemana: contexto.diaSemana },
+							{ diaSemana: null },
+						],
 					},
 					orderBy: {
 						createdAt: "asc",
@@ -416,13 +628,21 @@ export async function listarOcupantesHorario(req, res) {
 			return res.status(400).json({ ok: false, message: "horarioId es obligatorio" });
 		}
 
+		const contexto = getCalendarioContexto();
+
 		const horario = await prisma.horario.findUnique({
 			where: { id: horarioId },
 			select: {
 				id: true,
 				conductorId: true,
 				reservas: {
-					where: { estado: "ACTIVA" },
+					where: {
+						estado: "ACTIVA",
+						OR: [
+							{ diaSemana: contexto.diaSemana },
+							{ diaSemana: null },
+						],
+					},
 					orderBy: { createdAt: "asc" },
 					select: {
 						usuarioId: true,

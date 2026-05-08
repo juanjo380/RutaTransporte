@@ -3,17 +3,17 @@ import { prisma } from "../src/lib/prisma.js";
 const ROUTE_ID = "ruta-buga-tulua";
 
 const horarios = [
-	{ id: "1", direction: "ida", time: "06:30" },
-	{ id: "2", direction: "ida", time: "07:00" },
-	{ id: "3", direction: "ida", time: "08:00" },
-	{ id: "4", direction: "vuelta", time: "11:00" },
-	{ id: "5", direction: "vuelta", time: "11:30" },
-	{ id: "6", direction: "vuelta", time: "12:20" },
-	{ id: "7", direction: "ida", time: "13:10" },
-	{ id: "8", direction: "ida", time: "14:00" },
-	{ id: "9", direction: "vuelta", time: "16:30" },
-	{ id: "10", direction: "vuelta", time: "17:30" },
-	{ id: "11", direction: "vuelta", time: "18:10" },
+	{ id: "1", direction: "IDA", time: "06:30" },
+	{ id: "2", direction: "IDA", time: "07:00" },
+	{ id: "3", direction: "IDA", time: "08:00" },
+	{ id: "4", direction: "VUELTA", time: "11:00" },
+	{ id: "5", direction: "VUELTA", time: "11:30" },
+	{ id: "6", direction: "VUELTA", time: "12:20" },
+	{ id: "7", direction: "IDA", time: "13:10" },
+	{ id: "8", direction: "IDA", time: "14:00" },
+	{ id: "9", direction: "VUELTA", time: "16:30" },
+	{ id: "10", direction: "VUELTA", time: "17:30" },
+	{ id: "11", direction: "VUELTA", time: "18:10" },
 ];
 
 function buildDateAtTime(time) {
@@ -53,6 +53,7 @@ async function main() {
 			create: {
 				id: horario.id,
 				rutaId: ROUTE_ID,
+				direccion: horario.direction,
 				salida,
 				llegada,
 				cupoTotal: 40,
@@ -61,6 +62,7 @@ async function main() {
 			},
 			update: {
 				rutaId: ROUTE_ID,
+				direccion: horario.direction,
 				salida,
 				llegada,
 				cupoTotal: 40,

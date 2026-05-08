@@ -1,7 +1,9 @@
 import { Router } from "express";
 import {
 	asignarConductorHorario,
+	crearHorarioAdmin,
 	desasignarConductorHorario,
+	eliminarHorarioAdmin,
 	listarHorariosConductor,
 	listarConductoresDisponibles,
 	listarHorarios,
@@ -16,6 +18,8 @@ router.get("/", listarHorarios);
 router.get("/:horarioId/ocupantes", requireAuth, listarOcupantesHorario);
 router.get("/conductor/mis-horarios", requireAuth, requireRole("CONDUCTOR"), listarHorariosConductor);
 router.get("/admin/conductores-disponibles", requireAuth, requireAdmin, listarConductoresDisponibles);
+router.post("/admin", requireAuth, requireAdmin, crearHorarioAdmin);
+router.delete("/admin/:horarioId", requireAuth, requireAdmin, eliminarHorarioAdmin);
 router.post("/admin/asignar-conductor", requireAuth, requireAdmin, asignarConductorHorario);
 router.post("/admin/desasignar-conductor", requireAuth, requireAdmin, desasignarConductorHorario);
 
