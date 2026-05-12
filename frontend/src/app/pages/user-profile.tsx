@@ -138,25 +138,25 @@ export function UserProfilePage() {
   const canSeePrivateFields = user?.role === "admin";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 sm:p-6 md:p-8 transition-colors">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+            <div className="flex items-center justify-center sm:justify-start gap-3">
               <Bus className="size-10 text-indigo-600 dark:text-indigo-300" />
               <div>
-                <h1 className="text-4xl text-indigo-900 dark:text-indigo-200">Perfil</h1>
+                <h1 className="text-3xl sm:text-4xl text-indigo-900 dark:text-indigo-200">Perfil</h1>
                 <p className="text-gray-700 dark:text-gray-300">Información del usuario</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex justify-center sm:justify-end gap-2">
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center sm:justify-start gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
               <ArrowLeft className="size-4 mr-2" />
               Volver

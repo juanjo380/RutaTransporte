@@ -207,22 +207,22 @@ export function DriverView() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 sm:p-6 md:p-8 transition-colors">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-4">
+            <div className="flex items-center justify-center lg:justify-start gap-3">
               <div className="bg-green-600 dark:bg-green-500 p-3 rounded-xl shadow-lg">
                 <Bus className="size-8 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl text-green-900 dark:text-green-200">Panel del Conductor</h1>
+                <h1 className="text-3xl sm:text-4xl text-green-900 dark:text-green-200">Panel del Conductor</h1>
                 <p className="text-gray-700 dark:text-gray-300">Mis rutas y pasajeros</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2">
               <div
-                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer w-full justify-center sm:w-auto"
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate("/profile")}
@@ -244,7 +244,7 @@ export function DriverView() {
               </Button>
             </div>
             {calendarContext?.diaLabel ? (
-              <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3">
+              <div className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3 lg:w-auto lg:justify-start">
                 <div className="bg-green-600 p-2 rounded-lg">
                   <Calendar className="size-5 text-white" />
                 </div>
@@ -280,7 +280,7 @@ export function DriverView() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex items-center gap-2">
                 <Bus className="size-5 text-gray-600" />
                 <div>
@@ -317,13 +317,13 @@ export function DriverView() {
             {schedules.length === 0 ? (
               <p className="text-sm text-gray-600 dark:text-gray-300">No tienes horarios asignados actualmente.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                 {schedules.map((schedule) => (
                   <Button
                     key={schedule.id}
                     variant={selectedScheduleId === schedule.id ? "default" : "outline"}
                     onClick={() => setSelectedScheduleId(schedule.id)}
-                    className="flex items-center gap-2"
+                    className="w-full justify-start gap-2 sm:w-auto"
                   >
                     <Clock className="size-4" />
                     <span className="flex flex-col items-start">
@@ -344,8 +344,8 @@ export function DriverView() {
 
         {selectedSchedule && (
           <>
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
-              <div className="flex items-center justify-between">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">
                     {calendarContext?.fechaLabel || formatDate(selectedSchedule.salida)}

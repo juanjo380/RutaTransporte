@@ -466,23 +466,23 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 sm:p-6 md:p-8 transition-colors">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+            <div className="flex items-center justify-center sm:justify-start gap-3">
               <Bus className="size-10 text-indigo-600 dark:text-indigo-300" />
               <div>
-                <h1 className="text-4xl text-indigo-900 dark:text-indigo-200">Mi perfil</h1>
+                <h1 className="text-3xl sm:text-4xl text-indigo-900 dark:text-indigo-200">Mi perfil</h1>
                 <p className="text-gray-700 dark:text-gray-300">Configura tu información y foto</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
               <Button variant="outline" size="sm" onClick={handleBackToPanel}>
                 <ArrowLeft className="size-4 mr-2" />
                 Volver al panel
               </Button>
-              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg w-full justify-center sm:w-auto">
                 <UserIcon className="size-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{user.name}</span>
               </div>
@@ -645,11 +645,11 @@ export function ProfilePage() {
 
               <div className="space-y-2">
                 <Label>Sexo</Label>
-                <RadioGroup
-                  value={sex}
-                  onValueChange={(value) => setSex(value as LocalProfile["sex"])}
-                  className="grid grid-cols-2 gap-2"
-                >
+                  <RadioGroup
+                    value={sex}
+                    onValueChange={(value) => setSex(value as LocalProfile["sex"])}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                  >
                   <Label className="flex items-center gap-2 rounded-md border border-input bg-white/60 dark:bg-gray-900/40 px-3 py-2">
                     <RadioGroupItem value="MASCULINO" />
                     Masculino

@@ -868,20 +868,20 @@ export function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 sm:p-6 md:p-8 transition-colors">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-4">
+            <div className="flex items-center justify-center lg:justify-start gap-3">
               <Bus className="size-10 text-purple-600" />
               <div>
-                <h1 className="text-4xl text-purple-900 dark:text-purple-200">Panel Administrativo</h1>
+                <h1 className="text-3xl sm:text-4xl text-purple-900 dark:text-purple-200">Panel Administrativo</h1>
                 <p className="text-gray-700 dark:text-gray-300">Gestión de reservas y cupos</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2">
               <div
-                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer w-full justify-center sm:w-auto"
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate("/profile")}
@@ -903,7 +903,7 @@ export function AdminDashboard() {
               </Button>
             </div>
             {calendarContext?.diaLabel ? (
-              <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3">
+              <div className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl bg-white/70 dark:bg-gray-900/60 backdrop-blur-sm px-4 py-3 lg:w-auto lg:justify-start">
                 <div className="bg-purple-600 p-2 rounded-lg">
                   <Calendar className="size-5 text-white" />
                 </div>
@@ -931,7 +931,7 @@ export function AdminDashboard() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Reservas</CardTitle>
@@ -970,23 +970,23 @@ export function AdminDashboard() {
         </div>
 
         <Tabs defaultValue="matrix" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="matrix" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6">
+            <TabsTrigger value="matrix" className="flex w-full items-center justify-center gap-2">
               <Grid3x3 className="size-4" />
               Matriz de Rutas
             </TabsTrigger>
-            <TabsTrigger value="quick" className="flex items-center gap-2">
+            <TabsTrigger value="quick" className="flex w-full items-center justify-center gap-2">
               <ListChecks className="size-4" />
               Vista Rápida
             </TabsTrigger>
-            <TabsTrigger value="assign" className="flex items-center gap-2">
+            <TabsTrigger value="assign" className="flex w-full items-center justify-center gap-2">
               <UserCog className="size-4" />
               Asignar Conductores
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="matrix" className="space-y-4">
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 mb-2">Matriz de rutas</h2>
@@ -1035,7 +1035,7 @@ export function AdminDashboard() {
                   <CardContent className="space-y-3">
                     {schedule.driver ? (
                       <div className="bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-900/40 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3">
                             <div className="bg-green-600 p-2 rounded-lg">
                               <Bus className="size-5 text-white" />
@@ -1112,7 +1112,7 @@ export function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="quick" className="space-y-4">
-            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 mb-2">Vista rapida de ocupacion</h2>
@@ -1134,7 +1134,7 @@ export function AdminDashboard() {
                   </div>
                 ) : null}
               </div>
-              <div className="mt-3 max-w-xs">
+              <div className="mt-3 w-full max-w-xs">
                 <Select
                   value={reservationStatusFilter}
                   onValueChange={(value) => setReservationStatusFilter(value as ReservationStatusFilter)}
@@ -1211,7 +1211,7 @@ export function AdminDashboard() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="max-w-xs">
+                <div className="w-full max-w-xs">
                   <Select value={occupancyScheduleFilter} onValueChange={setOccupancyScheduleFilter}>
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrar por horario" />
@@ -1343,7 +1343,7 @@ export function AdminDashboard() {
 
             <Card className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
                       Total de estudiantes transportados {calendarContext?.diaLabel ? `- ${calendarContext.diaLabel}` : ""}
@@ -1501,7 +1501,7 @@ export function AdminDashboard() {
                 return (
                   <Card key={schedule.id}>
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Clock className="size-5 text-purple-600" />
                           {getScheduleTime(schedule)}
@@ -1511,7 +1511,7 @@ export function AdminDashboard() {
                           {schedule.driver && <Badge className="bg-green-600">Asignado</Badge>}
                         </div>
                       </div>
-                      <div className="mt-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
+                      <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 dark:text-gray-300">
                         <span>{getScheduleRoute(schedule)?.name || "Ruta sin informacion"}</span>
                         <Button
                           variant="destructive"

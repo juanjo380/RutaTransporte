@@ -31,7 +31,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 sm:p-6 md:p-8 transition-colors">
       <div className="w-full max-w-md space-y-6">
         {/* Theme Toggle */}
         <div className="flex justify-end">
@@ -51,7 +51,7 @@ export function LoginPage() {
               <Bus className="size-8 text-white" />
             </div>
           </div>
-          <h1 className="text-4xl text-blue-900 dark:text-blue-100">Transporte Uceva</h1>
+          <h1 className="text-3xl sm:text-4xl text-blue-900 dark:text-blue-100">Transporte Uceva</h1>
           <p className="text-lg text-gray-700 dark:text-gray-300">Buga - Tuluá / Tuluá - Buga</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Sistema de reserva de cupos para estudiantes
