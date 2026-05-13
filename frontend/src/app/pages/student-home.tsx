@@ -770,19 +770,19 @@ export function StudentHome() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 md:p-8 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 sm:p-6 md:p-8 transition-colors">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex-1" />
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-4">
+            <div className="hidden lg:flex flex-1" />
+            <div className="flex items-center justify-center gap-3">
               <Bus className="size-10 text-blue-600 dark:text-blue-400" />
-              <h1 className="text-4xl text-blue-900 dark:text-blue-100">Ruta Universitaria</h1>
+              <h1 className="text-3xl sm:text-4xl text-blue-900 dark:text-blue-100">Ruta Universitaria</h1>
             </div>
-            <div className="flex-1 flex justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2">
               <div
-                className="flex items-center gap-2 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer"
+                className="flex items-center gap-2 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2 rounded-lg cursor-pointer w-full justify-center sm:w-auto"
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate("/profile")}
@@ -834,19 +834,19 @@ export function StudentHome() {
 
         {/* Main Content */}
         <Tabs defaultValue="reservations" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="reservations" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 mb-6">
+            <TabsTrigger value="reservations" className="flex w-full items-center justify-center gap-2">
               <TicketCheck className="size-4" />
               Mis Reservas
             </TabsTrigger>
-            <TabsTrigger value="schedules" className="flex items-center gap-2">
+            <TabsTrigger value="schedules" className="flex w-full items-center justify-center gap-2">
               <Calendar className="size-4" />
               Horarios
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="schedules" className="space-y-4">
-            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">
@@ -904,7 +904,7 @@ export function StudentHome() {
           </TabsContent>
 
           <TabsContent value="reservations">
-            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 mb-4">
+            <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">

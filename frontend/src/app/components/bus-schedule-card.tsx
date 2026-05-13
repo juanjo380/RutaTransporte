@@ -64,7 +64,7 @@ export function BusScheduleCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex items-center gap-2">
             <MapPin className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
@@ -81,7 +81,7 @@ export function BusScheduleCard({
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-gray-500 dark:text-gray-400" />
             <div>

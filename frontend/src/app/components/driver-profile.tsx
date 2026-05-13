@@ -84,7 +84,7 @@ export function DriverProfile({ driver, compact = false }: DriverProfileProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t dark:border-gray-700">
           <div className="flex items-center gap-2">
             <Phone className="size-4 text-gray-500 dark:text-gray-400" />
             <div>
@@ -101,7 +101,7 @@ export function DriverProfile({ driver, compact = false }: DriverProfileProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">Placa del vehículo</p>
             <p className="font-semibold text-sm dark:text-gray-100">{driver.licensePlate}</p>
