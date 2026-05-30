@@ -577,6 +577,9 @@ export function ProfilePage() {
                   onChange={(event) => setPhone(event.target.value)}
                   placeholder="Ej: 3001234567"
                 />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Solo visible para el admin
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="profile-location">Ubicación / dirección</Label>
@@ -603,24 +606,12 @@ export function ProfilePage() {
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Información adicional (solo en este dispositivo)</CardTitle>
+            <CardTitle>Información adicional/opcional</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="profile-lastname">Apellido</Label>
-                <Input
-                  id="profile-lastname"
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  placeholder="Tu apellido"
-                />
-                <p className="text-xs text-gray-600 dark:text-gray-300">
-                  Se guarda en tu navegador (no se envía a la BD).
-                </p>
-              </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="profile-university">Universidad</Label>
                 <Select
                   value={university || "__none__"}
@@ -639,7 +630,6 @@ export function ProfilePage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-600 dark:text-gray-300">
-                  Se guarda en tu navegador (no se envía a la BD).
                 </p>
               </div>
 

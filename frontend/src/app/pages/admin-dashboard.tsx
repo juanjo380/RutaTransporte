@@ -989,7 +989,7 @@ export function AdminDashboard() {
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="font-semibold text-gray-800 mb-2">Matriz de rutas</h2>
+                  <h2 className="font-semibold text-gray-200 mb-2">Matriz de rutas</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
                     Visualizacion completa de todos los horarios, conductores asignados y estudiantes
                   </p>
@@ -1115,7 +1115,7 @@ export function AdminDashboard() {
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 sm:p-5 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="font-semibold text-gray-800 mb-2">Vista rapida de ocupacion</h2>
+                  <h2 className="font-semibold text-gray-200 mb-2">Vista rapida de ocupacion</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
                     Resumen compacto de cuantos estudiantes hay en cada horario
                   </p>
@@ -1365,7 +1365,7 @@ export function AdminDashboard() {
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm rounded-lg p-4 mb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="font-semibold text-gray-800 mb-2">Asignar conductores a rutas</h2>
+                  <h2 className="font-semibold text-gray-200 mb-2">Asignar conductores a rutas</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
                     Se muestran solo conductores disponibles por horario. La asignacion solicita confirmacion.
                   </p>
