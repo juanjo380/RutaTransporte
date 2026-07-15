@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Bus, Camera, LogOut, Moon, Sun, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Bus, Camera, KeyRound, LogOut, Moon, Sun, User as UserIcon } from "lucide-react";
 
 import { useAuth } from "../context/auth-context";
 import { useTheme } from "../context/theme-context";
@@ -481,6 +481,10 @@ export function ProfilePage() {
               <Button variant="outline" size="sm" onClick={handleBackToPanel}>
                 <ArrowLeft className="size-4 mr-2" />
                 Volver al panel
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate("/cambiar-contrasena")}>
+                <KeyRound className="size-4 mr-2" />
+                Cambiar contraseña
               </Button>
               <div className="flex items-center gap-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm px-3 py-2 rounded-lg w-full justify-center sm:w-auto">
                 <UserIcon className="size-4 text-gray-600" />

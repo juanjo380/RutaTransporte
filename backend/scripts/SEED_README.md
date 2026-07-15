@@ -115,7 +115,7 @@ Para datos de ejemplo del repo, edita `scripts/seed-users.public.json`.
 
 Para datos reales o sensibles, crea un archivo local en `scripts/private/seed-users.private.json` (esta carpeta se ignora por git).
 
-Formato ejemplo:
+Formato ejemplo:S
 
 ```javascript
 [
