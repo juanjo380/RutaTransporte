@@ -24,7 +24,11 @@ export function LoginPage() {
 
     const result = await login(email, password);
     if (result.ok) {
-      navigate("/");
+      if (result.mustChangePassword) {
+        navigate("/cambiar-contrasena", { replace: true });
+      } else {
+        navigate("/");
+      }
     } else {
       setError(result.message || "Email o contraseña incorrectos");
     }
@@ -131,6 +135,14 @@ export function LoginPage() {
                 <LogIn className="size-4 mr-2" />
                 Iniciar sesión
               </Button>
+
+              <button
+                type="button"
+                onClick={() => navigate("/olvido-contrasena")}
+                className="w-full text-sm text-blue-700 dark:text-blue-300 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
             </form>
           </CardContent>
         </Card>

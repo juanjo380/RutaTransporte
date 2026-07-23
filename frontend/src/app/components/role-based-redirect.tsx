@@ -8,6 +8,10 @@ export function RoleBasedRedirect() {
     return <Navigate to="/login" replace />;
   }
 
+  if (user.debeCambiarContrasena) {
+    return <Navigate to="/cambiar-contrasena" replace />;
+  }
+
   // Redirect based on user role
   switch (user.role) {
     case "student":

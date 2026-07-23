@@ -1,0 +1,1 @@
+-- This migration was intentionally left empty to preserve Prisma migration history.

@@ -7,19 +7,22 @@ generator client {
 }
 
 model Usuario {
-  id        String    @id @default(cuid())
-  nombre    String
-  email     String    @unique
-  password  String
-  telefono  String?
-  ubicacion String?
-  avatarUrl String?   @map("avatar_url")
-  rol       Rol       @default(ESTUDIANTE)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  reservas  Reserva[]
-  horariosSemanales HorarioSemanalEstudiante[]
-  horariosConducidos Horario[] @relation("ConductorHorarios")
+  id                    String    @id @default(cuid())
+  nombre                String
+  email                 String    @unique
+  password              String
+  telefono              String?
+  ubicacion             String?
+  avatarUrl             String?   @map("avatar_url")
+  rol                   Rol       @default(ESTUDIANTE)
+  debeCambiarContrasena Boolean   @default(false)
+  resetPasswordToken    String?
+  resetPasswordExpires  DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  reservas              Reserva[]
+  horariosSemanales     HorarioSemanalEstudiante[]
+  horariosConducidos    Horario[] @relation("ConductorHorarios")
 }
 
 model Ruta {

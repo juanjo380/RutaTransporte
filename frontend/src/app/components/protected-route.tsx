@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/auth-context";
+import { useLocation } from "react-router-dom";
 import { ReactNode } from "react";
 
 interface ProtectedRouteProps {
@@ -9,6 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return null;
@@ -16,6 +18,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user?.debeCambiarContrasena && location.pathname !== "/cambiar-contrasena") {
+    return <Navigate to="/cambiar-contrasena" replace />;
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {

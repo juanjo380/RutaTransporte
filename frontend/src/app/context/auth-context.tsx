@@ -10,12 +10,16 @@ export interface User {
   location?: string | null;
   avatarUrl?: string | null;
   role: UserRole;
+  debeCambiarContrasena?: boolean;
   driverId?: string; // For drivers
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string; mustChangePassword?: boolean }>;
+  changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
+  forgotPassword: (email: string) => Promise<{ ok: boolean; message?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   setUser: (user: User | null) => void;
   isAuthenticated: boolean;
@@ -34,6 +38,12 @@ type AuthApiResponse = {
   message?: string;
   token?: string;
   user?: User;
+  debeCambiarContrasena?: boolean;
+};
+
+type AuthActionResponse = {
+  ok: boolean;
+  message?: string;
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -130,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  const login = async (email: string, password: string): Promise<{ ok: boolean; message?: string }> => {
+  const login = async (email: string, password: string): Promise<{ ok: boolean; message?: string; mustChangePassword?: boolean }> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
@@ -152,12 +162,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
       setUserAndPersist(data.user);
 
-      return { ok: true };
+      return {
+        ok: true,
+        mustChangePassword: Boolean(data.debeCambiarContrasena || data.user.debeCambiarContrasena),
+      };
     } catch {
       return {
         ok: false,
         message: "No fue posible conectar con el servidor",
       };
+    }
+  };
+
+  const changePassword = async (currentPassword: string | undefined, newPassword: string) => {
+    try {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!token) {
+        return { ok: false, message: "No autenticado" };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/auth/me/password`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = (await response.json()) as AuthActionResponse;
+      if (!response.ok || !data.ok) {
+        return { ok: false, message: data.message || "No fue posible cambiar la contraseña" };
+      }
+
+      if (user) {
+        const updatedUser = { ...user, debeCambiarContrasena: false };
+        setUserAndPersist(updatedUser);
+      }
+
+      return { ok: true, message: data.message || "Contraseña actualizada" };
+    } catch {
+      return { ok: false, message: "No fue posible conectar con el servidor" };
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = (await response.json()) as AuthActionResponse;
+      if (!response.ok || !data.ok) {
+        return { ok: false, message: data.message || "No fue posible solicitar la recuperación" };
+      }
+
+      return { ok: true, message: data.message || "Revisa tu correo" };
+    } catch {
+      return { ok: false, message: "No fue posible conectar con el servidor" };
+    }
+  };
+
+  const resetPassword = async (token: string, newPassword: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, nuevaContrasena: newPassword }),
+      });
+
+      const data = (await response.json()) as AuthActionResponse;
+      if (!response.ok || !data.ok) {
+        return { ok: false, message: data.message || "No fue posible restablecer la contraseña" };
+      }
+
+      return { ok: true, message: data.message || "Contraseña actualizada" };
+    } catch {
+      return { ok: false, message: "No fue posible conectar con el servidor" };
     }
   };
 
@@ -172,6 +255,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         login,
+        changePassword,
+        forgotPassword,
+        resetPassword,
         logout,
         setUser: setUserAndPersist,
         isAuthenticated: !!user,
